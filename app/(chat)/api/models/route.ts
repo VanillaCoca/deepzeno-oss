@@ -1,20 +1,23 @@
-import { getAllGatewayModels, getCapabilities, isDemo } from "@/lib/ai/models";
+import {
+  getActiveModels,
+  getCapabilities,
+  getDefaultModelId,
+} from "@/lib/ai/models";
 
 export async function GET() {
   const headers = {
     "Cache-Control": "public, max-age=86400, s-maxage=86400",
   };
 
-  const curatedCapabilities = await getCapabilities();
+  const models = getActiveModels(process.env);
+  const capabilities = getCapabilities(process.env);
 
-  if (isDemo) {
-    const models = await getAllGatewayModels();
-    const capabilities = Object.fromEntries(
-      models.map((m) => [m.id, curatedCapabilities[m.id] ?? m.capabilities])
-    );
-
-    return Response.json({ capabilities, models }, { headers });
-  }
-
-  return Response.json(curatedCapabilities, { headers });
+  return Response.json(
+    {
+      models,
+      capabilities,
+      defaultModelId: getDefaultModelId(process.env),
+    },
+    { headers }
+  );
 }

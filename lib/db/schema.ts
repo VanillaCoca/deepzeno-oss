@@ -2,36 +2,23 @@ import type { InferSelectModel } from "drizzle-orm";
 import {
   boolean,
   foreignKey,
+  integer,
   json,
+  jsonb,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
 
-export const user = pgTable("User", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  email: varchar("email", { length: 64 }).notNull(),
-  password: varchar("password", { length: 64 }),
-  name: text("name"),
-  emailVerified: boolean("emailVerified").notNull().default(false),
-  image: text("image"),
-  isAnonymous: boolean("isAnonymous").notNull().default(false),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
-});
-
-export type User = InferSelectModel<typeof user>;
-
 export const chat = pgTable("Chat", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   createdAt: timestamp("createdAt").notNull(),
   title: text("title").notNull(),
-  userId: uuid("userId")
-    .notNull()
-    .references(() => user.id),
+  userId: uuid("userId").notNull(),
   visibility: varchar("visibility", { enum: ["public", "private"] })
     .notNull()
     .default("private"),
@@ -80,9 +67,7 @@ export const document = pgTable(
     kind: varchar("text", { enum: ["text", "code", "image", "sheet"] })
       .notNull()
       .default("text"),
-    userId: uuid("userId")
-      .notNull()
-      .references(() => user.id),
+    userId: uuid("userId").notNull(),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.id, table.createdAt] }),
@@ -101,9 +86,7 @@ export const suggestion = pgTable(
     suggestedText: text("suggestedText").notNull(),
     description: text("description"),
     isResolved: boolean("isResolved").notNull().default(false),
-    userId: uuid("userId")
-      .notNull()
-      .references(() => user.id),
+    userId: uuid("userId").notNull(),
     createdAt: timestamp("createdAt").notNull(),
   },
   (table) => ({
@@ -134,3 +117,166 @@ export const stream = pgTable(
 );
 
 export type Stream = InferSelectModel<typeof stream>;
+
+export const project = pgTable("projects", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  userId: uuid("user_id").notNull(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type Project = InferSelectModel<typeof project>;
+
+export const topic = pgTable("topics", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => project.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  isGeneral: boolean("is_general").notNull().default(false),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  position: integer("position").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type Topic = InferSelectModel<typeof topic>;
+
+export const conversation = pgTable("conversations", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  topicId: uuid("topic_id")
+    .notNull()
+    .references(() => topic.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => project.id, { onDelete: "cascade" }),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type Conversation = InferSelectModel<typeof conversation>;
+
+export const workspaceMessage = pgTable("messages", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  conversationId: uuid("conversation_id")
+    .notNull()
+    .references(() => conversation.id, { onDelete: "cascade" }),
+  topicId: uuid("topic_id")
+    .notNull()
+    .references(() => topic.id),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => project.id),
+  role: text("role").notNull(),
+  content: text("content").notNull(),
+  model: text("model"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type WorkspaceMessage = InferSelectModel<typeof workspaceMessage>;
+
+export const decision = pgTable("decisions", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => project.id),
+  topicId: uuid("topic_id")
+    .notNull()
+    .references(() => topic.id),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  rationale: text("rationale"),
+  kind: text("kind").notNull().default("plan"),
+  weight: text("weight").notNull().default("normal"),
+  status: text("status").notNull().default("active"),
+  sensitivity: text("sensitivity").notNull().default("normal"),
+  relevantMessageIds: uuid("relevant_message_ids").array(),
+  createdFromMessageId: uuid("created_from_message_id").references(
+    () => workspaceMessage.id
+  ),
+  confirmedByUserId: uuid("confirmed_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type Decision = InferSelectModel<typeof decision>;
+
+export const edge = pgTable("edges", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => project.id),
+  topicId: uuid("topic_id")
+    .notNull()
+    .references(() => topic.id),
+  sourceDecisionId: uuid("source_decision_id")
+    .notNull()
+    .references(() => decision.id),
+  targetDecisionId: uuid("target_decision_id")
+    .notNull()
+    .references(() => decision.id),
+  type: text("type").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type Edge = InferSelectModel<typeof edge>;
+
+export const candidateDecision = pgTable("candidate_decisions", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => project.id),
+  topicId: uuid("topic_id")
+    .notNull()
+    .references(() => topic.id),
+  conversationId: uuid("conversation_id").references(() => conversation.id),
+  messageId: uuid("message_id").references(() => workspaceMessage.id),
+  proposedTitle: text("proposed_title"),
+  proposedContent: text("proposed_content").notNull(),
+  proposedRationale: text("proposed_rationale"),
+  proposedKind: text("proposed_kind").default("plan"),
+  proposedWeight: text("proposed_weight").default("normal"),
+  confidence: real("confidence"),
+  preSelected: boolean("pre_selected").notNull().default(true),
+  status: text("status").notNull().default("pending"),
+  suggestedEdges: jsonb("suggested_edges"),
+  relevantMessageIds: uuid("relevant_message_ids").array(),
+  contentHash: text("content_hash"),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  resolvedDecisionId: uuid("resolved_decision_id").references(() => decision.id),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type CandidateDecision = InferSelectModel<typeof candidateDecision>;
+
+export const decisionLog = pgTable("decision_log", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  decisionId: uuid("decision_id").references(() => decision.id),
+  candidateId: uuid("candidate_id").references(() => candidateDecision.id),
+  action: text("action").notNull(),
+  actorType: text("actor_type").notNull().default("user"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type DecisionLog = InferSelectModel<typeof decisionLog>;

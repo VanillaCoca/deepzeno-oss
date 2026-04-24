@@ -1,12 +1,4 @@
-export const DEFAULT_CHAT_MODEL = "moonshotai/kimi-k2.5";
-
-export const titleModel = {
-  id: "mistral/mistral-small",
-  name: "Mistral Small",
-  provider: "mistral",
-  description: "Fast model for title generation",
-  gatewayOrder: ["mistral"],
-};
+type EnvLike = Record<string, string | undefined>;
 
 export type ModelCapabilities = {
   tools: boolean;
@@ -14,168 +6,207 @@ export type ModelCapabilities = {
   reasoning: boolean;
 };
 
+export type ModelProviderType =
+  | "anthropic"
+  | "openai"
+  | "openai-compatible"
+  | "gateway";
+
 export type ChatModel = {
   id: string;
   name: string;
   provider: string;
+  providerLabel: string;
   description: string;
+  capabilities: ModelCapabilities;
+  providerType: ModelProviderType;
   gatewayOrder?: string[];
   reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high";
 };
 
-export const chatModels: ChatModel[] = [
+type ChatModelDefinition = ChatModel & {
+  envKeys: readonly string[];
+  resolveModelId?: (env: EnvLike) => string | null;
+  staticModelId?: string;
+  resolveName?: (env: EnvLike) => string;
+};
+
+export type ResolvedChatModel = ChatModel & {
+  providerModelId: string;
+};
+
+export const DEFAULT_CHAT_MODEL = "anthropic:claude-sonnet-4-6";
+
+const modelCatalog: ChatModelDefinition[] = [
   {
-    id: "deepseek/deepseek-v3.2",
-    name: "DeepSeek V3.2",
-    provider: "deepseek",
-    description: "Fast and capable model with tool use",
-    gatewayOrder: ["bedrock", "deepinfra"],
+    id: "anthropic:claude-sonnet-4-6",
+    name: "Claude Sonnet 4.6",
+    provider: "anthropic",
+    providerLabel: "Anthropic",
+    description: "Strong default model for planning, coding, and long chats.",
+    capabilities: {
+      tools: true,
+      vision: true,
+      reasoning: false,
+    },
+    providerType: "anthropic",
+    envKeys: ["ANTHROPIC_API_KEY"],
+    staticModelId: "claude-sonnet-4-6",
   },
   {
-    id: "mistral/codestral",
-    name: "Codestral",
-    provider: "mistral",
-    description: "Code-focused model with tool use",
-    gatewayOrder: ["mistral"],
+    id: "openai:gpt-4.1",
+    name: "GPT-4.1",
+    provider: "openai",
+    providerLabel: "OpenAI",
+    description: "Reliable general-purpose model with strong instruction following.",
+    capabilities: {
+      tools: true,
+      vision: true,
+      reasoning: false,
+    },
+    providerType: "openai",
+    envKeys: ["OPENAI_API_KEY"],
+    staticModelId: "gpt-4.1",
   },
   {
-    id: "mistral/mistral-small",
-    name: "Mistral Small",
-    provider: "mistral",
-    description: "Fast vision model with tool use",
-    gatewayOrder: ["mistral"],
+    id: "dashscope:default",
+    name: "DashScope Compatible",
+    provider: "alibaba",
+    providerLabel: "DashScope",
+    description: "OpenAI-compatible model routed through DashScope.",
+    capabilities: {
+      tools: true,
+      vision: false,
+      reasoning: false,
+    },
+    providerType: "openai-compatible",
+    envKeys: ["DASHSCOPE_API_KEY", "DASHSCOPE_BASE_URL", "DASHSCOPE_MODEL"],
+    resolveModelId: (env) => env.DASHSCOPE_MODEL ?? null,
+    resolveName: (env) => {
+      const configuredModel = env.DASHSCOPE_MODEL;
+      if (!configuredModel) {
+        return "DashScope Compatible";
+      }
+
+      return `${humanizeModelName(configuredModel)} (DashScope)`;
+    },
   },
   {
-    id: "moonshotai/kimi-k2.5",
+    id: "gateway:moonshotai/kimi-k2.5",
     name: "Kimi K2.5",
     provider: "moonshotai",
-    description: "Moonshot AI flagship model",
+    providerLabel: "AI Gateway",
+    description: "Existing AI Gateway path retained for template compatibility.",
+    capabilities: {
+      tools: true,
+      vision: false,
+      reasoning: false,
+    },
+    providerType: "gateway",
+    envKeys: ["AI_GATEWAY_API_KEY"],
+    staticModelId: "moonshotai/kimi-k2.5",
     gatewayOrder: ["fireworks", "bedrock"],
-  },
-  {
-    id: "openai/gpt-oss-20b",
-    name: "GPT OSS 20B",
-    provider: "openai",
-    description: "Compact reasoning model",
-    gatewayOrder: ["groq", "bedrock"],
-    reasoningEffort: "low",
-  },
-  {
-    id: "openai/gpt-oss-120b",
-    name: "GPT OSS 120B",
-    provider: "openai",
-    description: "Open-source 120B parameter model",
-    gatewayOrder: ["fireworks", "bedrock"],
-    reasoningEffort: "low",
-  },
-  {
-    id: "xai/grok-4.1-fast-non-reasoning",
-    name: "Grok 4.1 Fast",
-    provider: "xai",
-    description: "Fast non-reasoning model with tool use",
-    gatewayOrder: ["xai"],
   },
 ];
 
-export async function getCapabilities(): Promise<
-  Record<string, ModelCapabilities>
-> {
-  const results = await Promise.all(
-    chatModels.map(async (model) => {
-      try {
-        const res = await fetch(
-          `https://ai-gateway.vercel.sh/v1/models/${model.id}/endpoints`,
-          { next: { revalidate: 86_400 } }
-        );
-        if (!res.ok) {
-          return [model.id, { tools: false, vision: false, reasoning: false }];
-        }
+function humanizeModelName(modelId: string) {
+  return modelId
+    .split(/[/:_-]+/)
+    .filter(Boolean)
+    .map((segment) => {
+      const normalized = segment.toLowerCase();
 
-        const json = await res.json();
-        const endpoints = json.data?.endpoints ?? [];
-        const params = new Set(
-          endpoints.flatMap(
-            (e: { supported_parameters?: string[] }) =>
-              e.supported_parameters ?? []
-          )
-        );
-        const inputModalities = new Set(
-          json.data?.architecture?.input_modalities ?? []
-        );
-
-        return [
-          model.id,
-          {
-            tools: params.has("tools"),
-            vision: inputModalities.has("image"),
-            reasoning: params.has("reasoning"),
-          },
-        ];
-      } catch {
-        return [model.id, { tools: false, vision: false, reasoning: false }];
+      if (normalized === "gpt") {
+        return "GPT";
       }
+
+      return segment.charAt(0).toUpperCase() + segment.slice(1);
     })
-  );
-
-  return Object.fromEntries(results);
+    .join(" ");
 }
 
-export const isDemo = process.env.IS_DEMO === "1";
-
-type GatewayModel = {
-  id: string;
-  name: string;
-  type?: string;
-  tags?: string[];
-};
-
-export type GatewayModelWithCapabilities = ChatModel & {
-  capabilities: ModelCapabilities;
-};
-
-export async function getAllGatewayModels(): Promise<
-  GatewayModelWithCapabilities[]
-> {
-  try {
-    const res = await fetch("https://ai-gateway.vercel.sh/v1/models", {
-      next: { revalidate: 86_400 },
-    });
-    if (!res.ok) {
-      return [];
-    }
-
-    const json = await res.json();
-    return (json.data ?? [])
-      .filter((m: GatewayModel) => m.type === "language")
-      .map((m: GatewayModel) => ({
-        id: m.id,
-        name: m.name,
-        provider: m.id.split("/")[0],
-        description: "",
-        capabilities: {
-          tools: m.tags?.includes("tool-use") ?? false,
-          vision: m.tags?.includes("vision") ?? false,
-          reasoning: m.tags?.includes("reasoning") ?? false,
-        },
-      }));
-  } catch {
-    return [];
-  }
-}
-
-export function getActiveModels(): ChatModel[] {
-  return chatModels;
-}
-
-export const allowedModelIds = new Set(chatModels.map((m) => m.id));
-
-export const modelsByProvider = chatModels.reduce(
-  (acc, model) => {
-    if (!acc[model.provider]) {
-      acc[model.provider] = [];
-    }
-    acc[model.provider].push(model);
-    return acc;
-  },
-  {} as Record<string, ChatModel[]>
+export const chatModels: ChatModel[] = modelCatalog.map(
+  ({ envKeys: _envKeys, resolveModelId: _resolveModelId, resolveName, staticModelId: _staticModelId, ...model }) => ({
+    ...model,
+    name: resolveName ? resolveName({}) : model.name,
+  })
 );
+
+function isConfigured(model: ChatModelDefinition, env: EnvLike) {
+  return model.envKeys.every((key) => Boolean(env[key]));
+}
+
+function resolveModel(model: ChatModelDefinition, env: EnvLike): ResolvedChatModel | null {
+  if (!isConfigured(model, env)) {
+    return null;
+  }
+
+  const providerModelId = model.resolveModelId
+    ? model.resolveModelId(env)
+    : model.staticModelId ?? null;
+
+  if (!providerModelId) {
+    return null;
+  }
+
+  return {
+    ...model,
+    name: model.resolveName ? model.resolveName(env) : model.name,
+    providerModelId,
+  };
+}
+
+export function getActiveModels(env: EnvLike = process.env): ResolvedChatModel[] {
+  return modelCatalog
+    .map((model) => resolveModel(model, env))
+    .filter((model): model is ResolvedChatModel => Boolean(model));
+}
+
+export function getCapabilities(env: EnvLike = process.env) {
+  return Object.fromEntries(
+    getActiveModels(env).map((model) => [model.id, model.capabilities])
+  ) as Record<string, ModelCapabilities>;
+}
+
+export function getModelById(id: string, env: EnvLike = process.env) {
+  return getActiveModels(env).find((model) => model.id === id) ?? null;
+}
+
+export function resolveChatModelSelection(
+  id: string | undefined,
+  env: EnvLike = process.env
+) {
+  const activeModels = getActiveModels(env);
+
+  if (activeModels.length === 0) {
+    return null;
+  }
+
+  return (
+    activeModels.find((model) => model.id === id) ??
+    activeModels.find((model) => model.id === DEFAULT_CHAT_MODEL) ??
+    activeModels[0]
+  );
+}
+
+export function getDefaultModelId(env: EnvLike = process.env) {
+  return resolveChatModelSelection(DEFAULT_CHAT_MODEL, env)?.id ?? DEFAULT_CHAT_MODEL;
+}
+
+export function getTitleModelId(env: EnvLike = process.env) {
+  const preferredIds = [
+    "openai:gpt-4.1",
+    "anthropic:claude-sonnet-4-6",
+    "dashscope:default",
+    "gateway:moonshotai/kimi-k2.5",
+  ];
+
+  for (const id of preferredIds) {
+    const resolved = getModelById(id, env);
+    if (resolved) {
+      return resolved.id;
+    }
+  }
+
+  return getDefaultModelId(env);
+}

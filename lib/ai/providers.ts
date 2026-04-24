@@ -1,6 +1,26 @@
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { customProvider, gateway } from "ai";
 import { isTestEnvironment } from "../constants";
-import { titleModel } from "./models";
+import { getModelById, getTitleModelId } from "./models";
+
+const anthropicProvider = createAnthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
+const openaiProvider = createOpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const dashscopeProvider =
+  process.env.DASHSCOPE_API_KEY && process.env.DASHSCOPE_BASE_URL
+    ? createOpenAICompatible({
+        apiKey: process.env.DASHSCOPE_API_KEY,
+        baseURL: process.env.DASHSCOPE_BASE_URL,
+        name: "dashscope",
+      })
+    : null;
 
 export const myProvider = isTestEnvironment
   ? (() => {
@@ -16,15 +36,38 @@ export const myProvider = isTestEnvironment
 
 export function getLanguageModel(modelId: string) {
   if (isTestEnvironment && myProvider) {
-    return myProvider.languageModel(modelId);
+    return myProvider.languageModel("chat-model");
   }
 
-  return gateway.languageModel(modelId);
+  const model = getModelById(modelId, process.env);
+
+  if (!model) {
+    throw new Error(
+      "No configured AI model matches the current selection. Check your environment variables."
+    );
+  }
+
+  switch (model.providerType) {
+    case "anthropic":
+      return anthropicProvider.chat(model.providerModelId);
+    case "openai":
+      return openaiProvider.chat(model.providerModelId);
+    case "openai-compatible":
+      if (!dashscopeProvider) {
+        throw new Error("DashScope is not configured.");
+      }
+      return dashscopeProvider.chatModel(model.providerModelId);
+    case "gateway":
+      return gateway.languageModel(model.providerModelId);
+    default:
+      throw new Error("Unsupported AI model provider.");
+  }
 }
 
 export function getTitleModel() {
   if (isTestEnvironment && myProvider) {
     return myProvider.languageModel("title-model");
   }
-  return gateway.languageModel(titleModel.id);
+
+  return getLanguageModel(getTitleModelId(process.env));
 }

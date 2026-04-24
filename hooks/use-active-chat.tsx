@@ -79,8 +79,52 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     currentModelIdRef.current = currentModelId;
   }, [currentModelId]);
 
+  useEffect(() => {
+    const cookieModel = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("chat-model="))
+      ?.split("=")[1];
+
+    if (cookieModel) {
+      setCurrentModelId(decodeURIComponent(cookieModel));
+    }
+  }, []);
+
   const [input, setInput] = useState("");
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
+
+  const { data: modelsData } = useSWR(
+    `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/models`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 3_600_000 }
+  );
+
+  useEffect(() => {
+    const availableModelIds = new Set<string>(
+      (modelsData?.models ?? []).map((model: { id: string }) => model.id)
+    );
+    const defaultModelId = modelsData?.defaultModelId as string | undefined;
+    const candidates = [currentModelId, defaultModelId, DEFAULT_CHAT_MODEL];
+    let preferredModelId: string | null = null;
+
+    for (const candidate of candidates) {
+      if (
+        candidate &&
+        (availableModelIds.size === 0 || availableModelIds.has(candidate))
+      ) {
+        preferredModelId = candidate;
+        break;
+      }
+    }
+
+    if (
+      preferredModelId &&
+      preferredModelId !== currentModelId &&
+      (availableModelIds.size === 0 || availableModelIds.has(preferredModelId))
+    ) {
+      setCurrentModelId(preferredModelId);
+    }
+  }, [currentModelId, modelsData?.defaultModelId, modelsData?.models]);
 
   const { data: chatData, isLoading } = useSWR(
     isNewChat
@@ -196,18 +240,6 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [chatId, isNewChat, setMessages]);
-
-  useEffect(() => {
-    if (chatData && !isNewChat) {
-      const cookieModel = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("chat-model="))
-        ?.split("=")[1];
-      if (cookieModel) {
-        setCurrentModelId(decodeURIComponent(cookieModel));
-      }
-    }
-  }, [chatData, isNewChat]);
 
   const hasAppendedQueryRef = useRef(false);
   useEffect(() => {

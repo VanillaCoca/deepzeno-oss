@@ -649,7 +649,10 @@ function PureModelSelectorCompact({
     activeModels.find((m: ChatModel) => m.id === selectedModelId) ??
     activeModels.find((m: ChatModel) => m.id === DEFAULT_CHAT_MODEL) ??
     activeModels[0];
-  const [provider] = selectedModel.id.split("/");
+
+  if (!selectedModel) {
+    return null;
+  }
 
   return (
     <ModelSelector onOpenChange={setOpen} open={open}>
@@ -659,7 +662,7 @@ function PureModelSelectorCompact({
           data-testid="model-selector"
           variant="ghost"
         >
-          {provider && <ModelSelectorLogo provider={provider} />}
+          <ModelSelectorLogo provider={selectedModel.provider} />
           <ModelSelectorName>{selectedModel.name}</ModelSelectorName>
         </Button>
       </ModelSelectorTrigger>
@@ -667,119 +670,56 @@ function PureModelSelectorCompact({
         <ModelSelectorInput placeholder="Search models..." />
         <ModelSelectorList>
           {(() => {
-            const curatedIds = new Set(chatModels.map((m) => m.id));
-            const allModels = dynamicModels
-              ? [
-                  ...chatModels,
-                  ...dynamicModels.filter((m) => !curatedIds.has(m.id)),
-                ]
-              : chatModels;
+            const allModels = dynamicModels ?? chatModels;
+            const grouped: Record<string, ChatModel[]> = {};
 
-            const grouped: Record<
-              string,
-              { model: ChatModel; curated: boolean }[]
-            > = {};
             for (const model of allModels) {
-              const key = curatedIds.has(model.id)
-                ? "_available"
-                : model.provider;
+              const key = model.providerLabel;
               if (!grouped[key]) {
                 grouped[key] = [];
               }
-              grouped[key].push({ model, curated: curatedIds.has(model.id) });
+              grouped[key].push(model);
             }
 
-            const sortedKeys = Object.keys(grouped).sort((a, b) => {
-              if (a === "_available") {
-                return -1;
-              }
-              if (b === "_available") {
-                return 1;
-              }
-              return a.localeCompare(b);
-            });
-
-            const providerNames: Record<string, string> = {
-              alibaba: "Alibaba",
-              anthropic: "Anthropic",
-              "arcee-ai": "Arcee AI",
-              bytedance: "ByteDance",
-              cohere: "Cohere",
-              deepseek: "DeepSeek",
-              google: "Google",
-              inception: "Inception",
-              kwaipilot: "Kwaipilot",
-              meituan: "Meituan",
-              meta: "Meta",
-              minimax: "MiniMax",
-              mistral: "Mistral",
-              moonshotai: "Moonshot",
-              morph: "Morph",
-              nvidia: "Nvidia",
-              openai: "OpenAI",
-              perplexity: "Perplexity",
-              "prime-intellect": "Prime Intellect",
-              xiaomi: "Xiaomi",
-              xai: "xAI",
-              zai: "Zai",
-            };
-
-            return sortedKeys.map((key) => (
-              <ModelSelectorGroup
-                heading={
-                  key === "_available"
-                    ? "Available"
-                    : (providerNames[key] ?? key)
-                }
-                key={key}
-              >
-                {grouped[key].map(({ model, curated }) => {
-                  const logoProvider = model.id.split("/")[0];
-                  return (
-                    <ModelSelectorItem
-                      className={cn(
-                        "flex w-full",
-                        model.id === selectedModel.id &&
-                          "border-b border-dashed border-foreground/50",
-                        !curated && "opacity-40 cursor-default"
+            return Object.entries(grouped).map(([groupName, models]) => (
+              <ModelSelectorGroup heading={groupName} key={groupName}>
+                {models.map((model) => (
+                  <ModelSelectorItem
+                    className={cn(
+                      "flex w-full",
+                      model.id === selectedModel.id &&
+                        "border-b border-dashed border-foreground/50"
+                    )}
+                    key={model.id}
+                    onSelect={() => {
+                      onModelChange?.(model.id);
+                      setCookie("chat-model", model.id);
+                      setOpen(false);
+                      setTimeout(() => {
+                        document
+                          .querySelector<HTMLTextAreaElement>(
+                            "[data-testid='multimodal-input']"
+                          )
+                          ?.focus();
+                      }, 50);
+                    }}
+                    value={model.id}
+                  >
+                    <ModelSelectorLogo provider={model.provider} />
+                    <ModelSelectorName>{model.name}</ModelSelectorName>
+                    <div className="ml-auto flex items-center gap-2 text-foreground/70">
+                      {capabilities?.[model.id]?.tools && (
+                        <WrenchIcon className="size-3.5" />
                       )}
-                      key={model.id}
-                      onSelect={() => {
-                        if (!curated) {
-                          return;
-                        }
-                        onModelChange?.(model.id);
-                        setCookie("chat-model", model.id);
-                        setOpen(false);
-                        setTimeout(() => {
-                          document
-                            .querySelector<HTMLTextAreaElement>(
-                              "[data-testid='multimodal-input']"
-                            )
-                            ?.focus();
-                        }, 50);
-                      }}
-                      value={model.id}
-                    >
-                      <ModelSelectorLogo provider={logoProvider} />
-                      <ModelSelectorName>{model.name}</ModelSelectorName>
-                      <div className="ml-auto flex items-center gap-2 text-foreground/70">
-                        {capabilities?.[model.id]?.tools && (
-                          <WrenchIcon className="size-3.5" />
-                        )}
-                        {capabilities?.[model.id]?.vision && (
-                          <EyeIcon className="size-3.5" />
-                        )}
-                        {capabilities?.[model.id]?.reasoning && (
-                          <BrainIcon className="size-3.5" />
-                        )}
-                        {!curated && (
-                          <LockIcon className="size-3 text-muted-foreground/50" />
-                        )}
-                      </div>
-                    </ModelSelectorItem>
-                  );
-                })}
+                      {capabilities?.[model.id]?.vision && (
+                        <EyeIcon className="size-3.5" />
+                      )}
+                      {capabilities?.[model.id]?.reasoning && (
+                        <BrainIcon className="size-3.5" />
+                      )}
+                    </div>
+                  </ModelSelectorItem>
+                ))}
               </ModelSelectorGroup>
             ));
           })()}
