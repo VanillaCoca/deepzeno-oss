@@ -139,28 +139,39 @@ Refine the two tree view modes from Phase 2.
 ### Steps
 
 1. **By-type view** improvements:
-   - Collapsible section headers for each kind (Goal, Constraint, Plan, Hypothesis, Principle, Evidence).
+   - Collapsible section headers for each kind, in the priority order established in Phase 2 Task 3:
+     1. Open Questions
+     2. Goals
+     3. Constraints
+     4. Plans
+     5. Hypotheses
+     6. Principles
+     7. Rejections (default collapsed; the others default expanded)
    - Show count next to header: "Goals (3)".
-   - Empty sections are hidden (don't show "Hypotheses (0)").
-   - Smooth expand/collapse animation.
+   - Empty sections are hidden entirely (don't show "Hypotheses (0)").
+   - Smooth expand/collapse animation (200-250ms ease).
 
 2. **By-relation view** improvements:
    - Anchor decisions render as root nodes.
    - `depends_on` edges render as indented children.
    - `supersedes` edges render with a visual indicator (strikethrough on the superseded node, arrow from new to old).
+   - `replaces` edges (open_question → resolved decision) render with a distinct visual indicator (e.g. a different arrow style or "↳ resolved by" label) so the user can see at a glance which open questions were answered by which decisions.
    - Orphan decisions (no edges) appear in a separate "Standalone" section at the bottom.
 
-3. **Superseded toggle**:
-   - Toggle button in the tree toolbar: "Show superseded" / "Hide superseded".
-   - When hidden, superseded nodes and their edges disappear from both view modes.
-   - Default: hidden.
+3. **Status toggle** (V1: 2 states only — `implemented` is V2):
+   - Toggle button in the tree toolbar: "Active only" / "Show all".
+   - "Active only" (default): hides decisions with `status = 'superseded'` and their edges.
+   - "Show all": shows everything including superseded nodes (dimmed).
+   - Note for future: V2 will introduce an `implemented` status and this becomes 3-state. Build the toggle as a controlled component so adding a third state later is a one-line change.
 
 ### Acceptance
 
 - Both view modes render cleanly with real data (10+ decisions, 5+ edges).
-- Sections collapse/expand smoothly.
-- Superseded toggle works in both view modes.
-- Empty sections don't show.
+- The by-type view shows groups in the priority order (Open Questions first, Rejections last); empty groups hidden; group counts shown.
+- Rejections section is collapsed by default; others expanded by default.
+- `replaces` edges render with a distinct visual treatment.
+- Status toggle works in both view modes; default is "Active only".
+- Sections collapse/expand smoothly with no layout jumps.
 
 ---
 
@@ -168,7 +179,7 @@ Refine the two tree view modes from Phase 2.
 
 ### What It Does
 
-Make the detail panel feel smooth and professional.
+Make the detail panel feel smooth and professional, with kind-specific affordances for `open_question`.
 
 ### Steps
 
@@ -178,12 +189,19 @@ Make the detail panel feel smooth and professional.
 4. The close button (X) is always visible at top-right, even when content is scrolled.
 5. "Bring to sandbox" confirmation: brief visual feedback (button turns green + checkmark for 1s) after successful context restoration.
 6. "Reference node" feedback: brief highlight on the chat input to draw attention to where the quote was inserted.
+7. **Open question polish** (kind-specific UI):
+   - Top of the detail panel shows a banner: "This is an open question — no decision yet." (amber background, subtle icon).
+   - The "Bring to sandbox" button label changes to "Discuss this question" when the node is an open_question.
+   - The "Resolve as decision" button (introduced in Phase 2 Task 4) is rendered as the primary action — visually weightier than other buttons in Section 4.
+   - When the form is submitted and the open_question becomes superseded, the panel smoothly transitions to show the newly created decision (no flash to the tree).
 
 ### Acceptance
 
 - Panel transitions feel smooth, not janky.
 - Switching between nodes doesn't cause layout jumps.
 - Both action buttons provide clear feedback.
+- For an open_question node: the banner appears, "Discuss this question" replaces "Bring to sandbox", "Resolve as decision" is visually primary.
+- After resolving an open_question, the panel transitions to the new decision without a jarring close/reopen.
 
 ---
 
@@ -201,12 +219,19 @@ Polish the inline candidate hints from Phase 2.
 2. Resting style: monospace, 80% opacity, small font.
 3. Click to expand: smooth accordion animation showing candidate previews.
 4. After batch confirm, transition the hint text from "+N candidates" to "✓ N confirmed" with a brief color change (default → green → settle to gray).
+5. **Agent-sourced hints** (candidates with `source = 'mcp_agent'`):
+   - These are NOT tied to a specific assistant message — they arrive at any time from external tools, often when the user is not actively chatting.
+   - Render as a separate notification at the top of the chat area (or wherever the candidate pool is visible), not anchored to an assistant message.
+   - Hint text format: `+N from {agent_name}` (e.g. "+2 from Claude Code"), pulled from `source_metadata.agent`.
+   - Same fade-in + glow animation. Same expand-to-preview behavior.
+   - On confirm, transitions to "✓ N from {agent_name} confirmed".
 
 ### Acceptance
 
 - Hint appearance is noticeable but not distracting.
 - Expand/collapse is smooth.
 - Confirmation state transition is visible and satisfying.
+- Hints from MCP-submitted candidates render distinctly ("+N from Claude Code") and are not incorrectly anchored to a chat message.
 
 ---
 
@@ -217,14 +242,11 @@ The product feels like a real tool, not a prototype:
 1. Full project + topic navigation works.
 2. Sandbox clear / back / forward works.
 3. Streaming doesn't hijack the user's scroll position.
-4. Tree panel views are polished and toggle correctly.
-5. Detail panel transitions are smooth.
-6. Candidate hints animate appropriately.
+4. Tree panel views are polished, with 7-kind priority ordering and the 2-state status toggle.
+5. Detail panel transitions are smooth; open_question nodes show their dedicated banner and primary "Resolve as decision" affordance.
+6. Candidate hints animate appropriately, including the distinct rendering for MCP-submitted candidates.
 
 **The complete user story**:
-User logs in → creates a project → creates topics → chats with AI →
-decisions are extracted → user reviews and confirms → decisions appear in tree →
-user navigates between topics → context follows → user can reference past decisions
-in new conversations → the AI knows what was decided.
+Sean (solo founder) logs in → creates a project → creates topics → chats with AI to think through product/strategy → decisions are extracted → reviews and confirms → decisions appear in tree (with open questions and rejections clearly marked) → switches to Claude Code, which reads the project's truth via MCP and starts implementing → during implementation, Claude Code discovers a constraint and submits a candidate back to Zeno → Sean returns to Zeno, sees the new candidate marked "via Claude Code", confirms it → next conversation in either environment reflects the updated truth.
 
 **After Phase 3, the product is ready for Sean to demonstrate to potential users and investors.**

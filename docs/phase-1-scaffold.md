@@ -216,8 +216,12 @@ CREATE TABLE decisions (
   title TEXT NOT NULL,
   content TEXT NOT NULL,
   rationale TEXT,
+  -- kind 合法值: 'goal' | 'constraint' | 'plan' | 'hypothesis' | 'principle' | 'open_question' | 'rejection'
+  -- 不用 enum 约束（用 TEXT），便于演化。提取阶段由 prompt 保证；写入路径由应用层校验。
   kind TEXT NOT NULL DEFAULT 'plan',
   weight TEXT NOT NULL DEFAULT 'normal',
+  -- status 合法值（V1）: 'active' | 'superseded'
+  -- V2 将增加 'implemented'，由 update_decision_status MCP 工具驱动。V1 不要加。
   status TEXT NOT NULL DEFAULT 'active',
   sensitivity TEXT NOT NULL DEFAULT 'normal',
   relevant_message_ids UUID[],
@@ -234,7 +238,9 @@ CREATE TABLE edges (
   topic_id UUID NOT NULL REFERENCES topics(id),
   source_decision_id UUID NOT NULL REFERENCES decisions(id),
   target_decision_id UUID NOT NULL REFERENCES decisions(id),
-  type TEXT NOT NULL, -- 'supersedes' | 'depends_on'
+  -- type 合法值: 'supersedes' | 'depends_on' | 'replaces'
+  -- 'replaces' 用于 open_question → 新决策的转化关系（Phase 2 Task 4）
+  type TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -248,6 +254,7 @@ CREATE TABLE candidate_decisions (
   proposed_title TEXT,
   proposed_content TEXT NOT NULL,
   proposed_rationale TEXT,
+  -- proposed_kind 合法值同 decisions.kind: goal|constraint|plan|hypothesis|principle|open_question|rejection
   proposed_kind TEXT DEFAULT 'plan',
   proposed_weight TEXT DEFAULT 'normal',
   confidence REAL,
@@ -258,6 +265,16 @@ CREATE TABLE candidate_decisions (
   content_hash TEXT,
   resolved_at TIMESTAMPTZ,
   resolved_decision_id UUID REFERENCES decisions(id),
+  -- source: 'zeno_extraction' | 'mcp_agent' | 'manual'
+  -- zeno_extraction = Zeno 自身从对话中提取
+  -- mcp_agent = 外部 agent 通过 MCP submit_candidate 提交（Phase 2 Task 7）
+  -- manual = 用户手动创建（V1 暂不开放，预留字段）
+  source TEXT NOT NULL DEFAULT 'zeno_extraction',
+  -- source_metadata 记录外部来源的额外信息，例如:
+  --   { agent: "claude-code", session_id: "...", evidence_url: "https://..." }
+  source_metadata JSONB,
+  -- external_evidence: 来自 agent 的证据片段（URL / file path / commit hash / 简短引文）
+  external_evidence TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -266,11 +283,28 @@ CREATE TABLE decision_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   decision_id UUID REFERENCES decisions(id),
   candidate_id UUID REFERENCES candidate_decisions(id),
-  action TEXT NOT NULL, -- 'created' | 'superseded' | 'candidate_rejected'
+  -- action 合法值: 'created' | 'superseded' | 'candidate_rejected' | 'open_question_resolved'
+  action TEXT NOT NULL,
   actor_type TEXT NOT NULL DEFAULT 'user',
   metadata JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- api_keys (Phase 2 Task 7 will use this for MCP server auth; create the table now)
+CREATE TABLE api_keys (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id),
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  -- 存储哈希值（用 sha256 即可），原始 token 仅在生成时一次性返回给用户
+  key_hash TEXT NOT NULL UNIQUE,
+  -- key_prefix 是原始 token 的前 8 个字符，用于让用户在 UI 里识别是哪个 key（"zn_a3f2..."）
+  key_prefix TEXT NOT NULL,
+  label TEXT,
+  last_used_at TIMESTAMPTZ,
+  revoked_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX api_keys_project_active_idx ON api_keys(project_id) WHERE revoked_at IS NULL;
 ```
 
 4. Add RLS policies:
@@ -284,6 +318,10 @@ CREATE TABLE decision_log (
 - All migrations run without errors on a fresh Supabase project.
 - RLS policies are active and tested (query as authenticated user returns only own data).
 - `decision_log` rejects UPDATE and DELETE operations.
+- `decisions.kind` accepts the 7 documented values; application-level validation rejects others when extraction code lands in Phase 2.
+- `candidate_decisions.source` defaults to `'zeno_extraction'`; `'mcp_agent'` and `'manual'` are also acceptable values.
+- `api_keys` table exists. RLS: a user can only see their own keys.
+- `edges.type` accepts `'supersedes' | 'depends_on' | 'replaces'`.
 
 ---
 
