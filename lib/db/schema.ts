@@ -259,7 +259,9 @@ export const candidateDecision = pgTable("candidate_decisions", {
   relevantMessageIds: uuid("relevant_message_ids").array(),
   contentHash: text("content_hash"),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
-  resolvedDecisionId: uuid("resolved_decision_id").references(() => decision.id),
+  resolvedDecisionId: uuid("resolved_decision_id").references(
+    () => decision.id
+  ),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

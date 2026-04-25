@@ -103,7 +103,7 @@ function getClient(): any {
   return getSupabaseAdminClient() as any;
 }
 
-export async function saveChat({
+export function saveChat({
   id,
   userId,
   title,
@@ -268,7 +268,7 @@ export async function getChatById({ id }: { id: string }) {
   }
 }
 
-export async function saveMessages({ messages }: { messages: DBMessage[] }) {
+export function saveMessages({ messages }: { messages: DBMessage[] }) {
   const client = getClient();
 
   return ensureResult(
@@ -282,7 +282,7 @@ export async function saveMessages({ messages }: { messages: DBMessage[] }) {
   );
 }
 
-export async function updateMessage({
+export function updateMessage({
   id,
   parts,
 }: {
@@ -319,7 +319,7 @@ export async function getMessagesByChatId({ id }: { id: string }) {
   }
 }
 
-export async function voteMessage({
+export function voteMessage({
   chatId,
   messageId,
   type,
@@ -528,7 +528,7 @@ export async function deleteDocumentsByIdAfterTimestamp({
   }
 }
 
-export async function saveSuggestions({
+export function saveSuggestions({
   suggestions,
 }: {
   suggestions: Suggestion[];
@@ -625,7 +625,11 @@ export async function deleteMessagesByChatIdAfterTimestamp({
     );
 
     return ensureResult(
-      client.from("Message_v2").delete().eq("chatId", chatId).in("id", messageIds),
+      client
+        .from("Message_v2")
+        .delete()
+        .eq("chatId", chatId)
+        .in("id", messageIds),
       "Failed to delete messages by chat id after timestamp"
     );
   } catch {
@@ -636,7 +640,7 @@ export async function deleteMessagesByChatIdAfterTimestamp({
   }
 }
 
-export async function updateChatVisibilityById({
+export function updateChatVisibilityById({
   chatId,
   visibility,
 }: {
@@ -715,7 +719,7 @@ export async function getMessageCountByUserId({
   }
 }
 
-export async function createStreamId({
+export function createStreamId({
   streamId,
   chatId,
 }: {

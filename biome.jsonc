@@ -12,6 +12,8 @@
   "files": {
     "includes": [
       "**/*",
+      "!.vs",
+      "!.vs/**",
       "!components/ai-elements",
       "!components/elements",
       "!components/ui",
@@ -49,6 +51,7 @@
       },
       "performance": {
         "noBarrelFile": "off",
+        "noNamespaceImport": "off",
         "useTopLevelRegex": "off"
       }
     }

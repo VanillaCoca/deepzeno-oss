@@ -8,7 +8,11 @@ export default function Page() {
       <p className="text-sm text-muted-foreground">
         Sign in to enter the workspace, or create an account to get started.
       </p>
-      <Suspense fallback={<div className="h-[260px] rounded-2xl border border-border/50 bg-muted/30" />}>
+      <Suspense
+        fallback={
+          <div className="h-[260px] rounded-2xl border border-border/50 bg-muted/30" />
+        }
+      >
         <LoginForm />
       </Suspense>
     </>
