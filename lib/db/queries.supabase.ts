@@ -70,8 +70,7 @@ function mapSuggestion(row: DatabaseRecord): Suggestion {
     documentCreatedAt: toDate(row.documentCreatedAt),
     originalText: String(row.originalText),
     suggestedText: String(row.suggestedText),
-    description:
-      typeof row.description === "string" ? row.description : null,
+    description: typeof row.description === "string" ? row.description : null,
     isResolved: Boolean(row.isResolved),
     userId: String(row.userId),
     createdAt: toDate(row.createdAt),
@@ -331,18 +330,16 @@ export function voteMessage({
   const client = getClient();
 
   return ensureResult(
-    client
-      .from("Vote_v2")
-      .upsert(
-        {
-          chatId,
-          messageId,
-          isUpvoted: type === "up",
-        },
-        {
-          onConflict: "chatId,messageId",
-        }
-      ),
+    client.from("Vote_v2").upsert(
+      {
+        chatId,
+        messageId,
+        isUpvoted: type === "up",
+      },
+      {
+        onConflict: "chatId,messageId",
+      }
+    ),
     "Failed to vote message"
   );
 }
@@ -560,7 +557,9 @@ export async function getSuggestionsByDocumentId({
       "Failed to get suggestions by document id"
     );
 
-    return toRecords(suggestions).map((suggestion) => mapSuggestion(suggestion));
+    return toRecords(suggestions).map((suggestion) =>
+      mapSuggestion(suggestion)
+    );
   } catch {
     throw new ChatbotError(
       "bad_request:database",

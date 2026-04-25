@@ -28,11 +28,7 @@ import {
 } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
-export function ProjectSidebar({
-  userEmail,
-}: {
-  userEmail: string | null;
-}) {
+export function ProjectSidebar({ userEmail }: { userEmail: string | null }) {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
@@ -55,7 +51,10 @@ export function ProjectSidebar({
   }
 
   return (
-    <Sidebar className="border-r border-sidebar-border/60" collapsible="offcanvas">
+    <Sidebar
+      className="border-r border-sidebar-border/60"
+      collapsible="offcanvas"
+    >
       <SidebarHeader className="border-b border-sidebar-border/60 px-4 py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">

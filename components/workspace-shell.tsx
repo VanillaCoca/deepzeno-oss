@@ -2,8 +2,8 @@
 
 import { PanelRightCloseIcon, PanelRightOpenIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useLocalStorage } from "usehooks-ts";
 import { Toaster } from "sonner";
+import { useLocalStorage } from "usehooks-ts";
 import { Button } from "@/components/ui/button";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";

@@ -13,7 +13,6 @@
     "includes": [
       "**/*",
       "!.vs",
-      "!.vs/**",
       "!components/ai-elements",
       "!components/elements",
       "!components/ui",

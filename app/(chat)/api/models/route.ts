@@ -1,4 +1,8 @@
-import { getActiveModels, getCapabilities, getDefaultModelId } from "@/lib/ai/models";
+import {
+  getActiveModels,
+  getCapabilities,
+  getDefaultModelId,
+} from "@/lib/ai/models";
 
 export function GET() {
   const headers = {

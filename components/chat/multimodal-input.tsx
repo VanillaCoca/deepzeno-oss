@@ -7,7 +7,6 @@ import {
   ArrowUpIcon,
   BrainIcon,
   EyeIcon,
-  LockIcon,
   WrenchIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
