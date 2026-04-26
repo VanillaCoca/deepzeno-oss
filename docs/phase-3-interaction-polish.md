@@ -1,252 +1,420 @@
-# Phase 3: Interaction Polish + Sidebar + Sandbox Navigation
+**Phase 3: Interaction Polish + Sidebar + Sandbox Navigation**
 
-> **Audience**: This file is for Codex to execute, but Sean will provide
-> frequent feedback during this phase. Expect multiple iteration rounds.
-> Each sub-task may go through 2-3 revision cycles based on Sean's testing.
->
-> **Prerequisite**: Phase 2 is complete. The full decision loop
-> (chat → extract → confirm → tree → context injection) works end-to-end.
+*Updated after design review · 2026-04-26*
 
----
 
-## Context for Codex
+> **Audience & Prerequisites**
 
-Phase 3 is about making the product feel right. The core loop works, but the
-interactions need refinement. Sean will test each feature and provide specific
-feedback. Expect to receive follow-up instructions like "the animation is too
-slow" or "the panel transition feels janky" — these are normal iteration, not bugs.
+> For Codex to execute. Sean provides frequent feedback — expect 2-3 revision cycles per sub-task.
 
-**UX PRESERVATION RULE (from Phase 1, still applies):**
-Full-viewport layout, responsive behavior, and streaming UX quality from the
-vercel/chatbot template must never degrade. Polish means making things better
-than the template baseline, never worse. Do NOT reference the old Codex demo's
-visual/layout approach — only its functional behavior.
+> Prerequisite: Phase 2 complete. Full decision loop (chat → extract → confirm → tree → context injection) works end-to-end.
 
----
+> UX Preservation Rule (from Phase 1, still applies): full-viewport layout, responsive behavior, and streaming UX quality must never degrade.
 
-## Task 1: Project Sidebar — Full Implementation
 
-### What It Does
+
+Phase 3 is about making the product feel right. The core loop works; interactions need refinement. Feedback like 'the animation is too slow' or 'the panel transition feels janky' is normal iteration, not bugs.
+
+**Task 1: Project Sidebar — Full Implementation**
+
+**What It Does**
 
 Replace the Phase 1 placeholder sidebar with a functional project + topic navigation system.
 
-### Steps
+**Steps**
 
-1. Modify `components/project-sidebar.tsx`:
+**1. Modify components/project-sidebar.tsx**
 
-   **Top section: Project selector**
-   - Dropdown showing the user's projects.
-   - "New Project" button below the dropdown.
-   - Creating a project: modal with name input. On create, auto-provision a General topic.
+Top section — Project selector:
 
-   **Middle section: Topics list**
-   - Shows all non-archived topics for the selected project.
-   - Each topic item shows: label, unread candidate count badge (if any pending candidates).
-   - Clicking a topic switches the sandbox and truth panel to that topic's context.
-   - "New Topic" button at the bottom of the list. On create: modal with label input, inserts with next position value.
-   - The General topic is always first and cannot be archived.
-   - Drag-to-reorder topics (optional — skip if complex, just use position field ordering).
+- Dropdown showing the user's projects
 
-   **Bottom section: Archived topics**
-   - Collapsible section labeled "Archived".
-   - Shows topics with `archived_at` set.
-   - Clicking an archived topic shows it read-only (chat history viewable, no new messages, tree viewable).
-   - No unarchive action in V1.
+- 'New Project' button below the dropdown
 
-2. Implement topic archiving:
-   - Right-click or three-dot menu on a non-General topic → "Archive".
-   - Sets `archived_at = now()` on the topic.
-   - Topic moves to the Archived section.
+- Creating a project: modal with name input. On create, auto-provision a General topic.
 
-3. When switching topics:
-   - Sandbox loads the most recent conversation segment for that topic.
-   - Truth panel (tree + candidate pool) loads that topic's decisions and candidates.
-   - If no conversation exists for the topic, create one automatically.
+Middle section — Topics list:
 
-### Acceptance
+- Shows all non-archived topics for the selected project
 
-- User can create projects and topics.
-- Switching topics updates both the chat and the truth panel.
-- General topic is always first and not archivable.
-- Archived topics appear in collapsed section.
-- Pending candidate count badge shows on topics that have unreviewed candidates.
+- Each topic item shows: label, unread candidate count badge (if any pending candidates)
 
----
+- Clicking a topic switches the sandbox and truth panel to that topic's context
 
-## Task 2: Sandbox Navigation — Conversation Segments
+- 'New Topic' button at bottom. On create: modal with label input, inserts with next position value.
 
-### What It Does
+- The General topic is always first and cannot be archived
 
-Users can clear the sandbox (start a fresh conversation) and navigate between
-previous conversation segments using back/forward.
+- Drag-to-reorder topics (optional — skip if complex, use position field ordering)
 
-### Steps
+Bottom section — Archived topics:
 
-1. Add toolbar buttons above the chat input:
-   - **Clear** (eraser icon): closes the current conversation (sets `ended_at = now()`) and creates a new empty conversation for the same topic. Old messages disappear from view but are preserved in DB.
-   - **Back** (left arrow): navigate to the previous conversation segment. Shows older messages. Chat input is active — typing resumes that segment.
-   - **Forward** (right arrow): navigate to the next conversation segment.
+- Collapsible section labeled 'Archived'
 
-2. Conversation segment state:
-   - Track `currentConversationId` in React state (or URL param).
-   - When viewing an older segment, the forward button becomes active.
-   - When at the latest segment, forward is disabled.
-   - Back is disabled when at the oldest segment.
+- Shows topics with archived_at set
 
-3. Switching to a topic always shows the most recent conversation segment.
+- Clicking an archived topic shows it read-only (chat history viewable, no new messages, tree viewable)
 
-### Acceptance
+- No unarchive action in V1
 
-- Clear creates a new conversation and hides old messages.
-- Back/forward navigate between conversation segments within the same topic.
-- Typing in an old segment appends to that segment (resumes it).
-- The experience feels like a sessionless, continuous chat surface.
+**2. Implement topic archiving**
 
----
+- Right-click or three-dot menu on a non-General topic → 'Archive'
 
-## Task 3: Streaming Scroll Behavior
+- Sets archived_at = now() on the topic
 
-### What It Does
+- Topic moves to the Archived section
 
-Fix the most common streaming UX issue: the page auto-scrolling while the user is trying to read.
+**3. When switching topics**
 
-### Steps
+- Sandbox loads the most recent conversation segment for that topic
 
-1. Implement scroll-intent detection in the chat message list:
-   - If the user is scrolled to the bottom (within 100px threshold), auto-scroll as new tokens arrive.
-   - If the user has scrolled up to read earlier messages, STOP auto-scrolling. Let them read in peace.
-   - When the user scrolls back to the bottom, resume auto-scroll.
+- Truth panel (tree + candidate pool) loads that topic's decisions and candidates
 
-2. Add a "scroll to bottom" floating button that appears when the user is scrolled up and new content is arriving below.
+- If no conversation exists for the topic, create one automatically
 
-3. Verify this works with long streaming responses (1000+ tokens).
+**Acceptance**
 
-### Acceptance
+- User can create projects and topics
 
-- During streaming, if user is at bottom, page scrolls smoothly with new content.
-- If user scrolls up during streaming, scrolling stops — content continues to arrive but doesn't pull the viewport.
-- "Scroll to bottom" button appears and works correctly.
-- No jank or flicker during streaming.
+- Switching topics updates both the chat and the truth panel
 
----
+- General topic is always first and not archivable
 
-## Task 4: Tree Panel View Mode Polish
+- Archived topics appear in collapsed section
 
-### What It Does
+- Pending candidate count badge shows on topics with unreviewed candidates
+
+**Task 2: Sandbox Navigation — Conversation Segments**
+
+**What It Does**
+
+Users can clear the sandbox (start fresh conversation) and navigate between previous conversation segments using back/forward.
+
+**Steps**
+
+**1. Toolbar buttons above chat input**
+
+- Clear (eraser icon): closes current conversation (sets ended_at = now()), creates new empty conversation for same topic. Old messages disappear from view but preserved in DB.
+
+- Back (left arrow): navigate to previous conversation segment. Chat input active — typing resumes that segment.
+
+- Forward (right arrow): navigate to next conversation segment.
+
+**2. Conversation segment state**
+
+- Track currentConversationId in React state (or URL param)
+
+- When viewing an older segment, forward button is active
+
+- When at latest segment, forward is disabled
+
+- Back is disabled when at oldest segment
+
+- Switching to a topic always shows the most recent conversation segment
+
+**Acceptance**
+
+- Clear creates a new conversation and hides old messages
+
+- Back/forward navigate between segments within the same topic
+
+- Typing in an old segment appends to that segment (resumes it)
+
+- Experience feels like a sessionless, continuous chat surface
+
+**Task 3: Streaming Scroll Behavior**
+
+**What It Does**
+
+Fix the most common streaming UX issue: page auto-scrolling while the user is trying to read.
+
+**Steps**
+
+**1. Scroll-intent detection**
+
+- If user is scrolled to bottom (within 100px threshold): auto-scroll as new tokens arrive
+
+- If user has scrolled up to read: STOP auto-scrolling. Content continues to arrive but doesn't pull the viewport.
+
+- When user scrolls back to bottom: resume auto-scroll
+
+**2. 'Scroll to bottom' floating button**
+
+- Appears when user is scrolled up and new content is arriving below
+
+- Clicking returns to bottom and resumes auto-scroll
+
+**3. Verification**
+
+- Verify works with long streaming responses (1000+ tokens)
+
+**Acceptance**
+
+- During streaming, if user is at bottom: page scrolls smoothly with new content
+
+- If user scrolls up during streaming: scrolling stops, content continues to arrive without pulling viewport
+
+- 'Scroll to bottom' button appears and works correctly
+
+- No jank or flicker during streaming
+
+**Task 4: Tree Panel View Mode Polish**
+
+**What It Does**
 
 Refine the two tree view modes from Phase 2.
 
-### Steps
 
-1. **By-type view** improvements:
-   - Collapsible section headers for each kind, in the priority order established in Phase 2 Task 3:
-     1. Open Questions
-     2. Goals
-     3. Constraints
-     4. Plans
-     5. Hypotheses
-     6. Principles
-     7. Rejections (default collapsed; the others default expanded)
-   - Show count next to header: "Goals (3)".
-   - Empty sections are hidden entirely (don't show "Hypotheses (0)").
-   - Smooth expand/collapse animation (200-250ms ease).
+> **Changes from original spec (design review 2026-04-26)**
 
-2. **By-relation view** improvements:
-   - Anchor decisions render as root nodes.
-   - `depends_on` edges render as indented children.
-   - `supersedes` edges render with a visual indicator (strikethrough on the superseded node, arrow from new to old).
-   - `replaces` edges (open_question → resolved decision) render with a distinct visual indicator (e.g. a different arrow style or "↳ resolved by" label) so the user can see at a glance which open questions were answered by which decisions.
-   - Orphan decisions (no edges) appear in a separate "Standalone" section at the bottom.
+> 1. Status toggle removed — tree shows active nodes only; no 'Show all / Active only' toggle exists.
 
-3. **Status toggle** (V1: 2 states only — `implemented` is V2):
-   - Toggle button in the tree toolbar: "Active only" / "Show all".
-   - "Active only" (default): hides decisions with `status = 'superseded'` and their edges.
-   - "Show all": shows everything including superseded nodes (dimmed).
-   - Note for future: V2 will introduce an `implemented` status and this becomes 3-state. Build the toggle as a controlled component so adding a third state later is a one-line change.
+> 2. supersedes edges removed from by-relation rendering — version chains live in the detail panel's version history section, not in the tree.
 
-### Acceptance
+> 3. 'replaces' renamed to 'resolved_by' throughout — this is the open_question → decision edge type. Ensure consistency with Phase 2 schema.
 
-- Both view modes render cleanly with real data (10+ decisions, 5+ edges).
-- The by-type view shows groups in the priority order (Open Questions first, Rejections last); empty groups hidden; group counts shown.
-- Rejections section is collapsed by default; others expanded by default.
-- `replaces` edges render with a distinct visual treatment.
-- Status toggle works in both view modes; default is "Active only".
-- Sections collapse/expand smoothly with no layout jumps.
 
----
 
-## Task 5: Detail Panel Transition & Polish
+**Steps**
 
-### What It Does
+**1. By-type view improvements**
 
-Make the detail panel feel smooth and professional, with kind-specific affordances for `open_question`.
+- Collapsible section headers for each kind, in priority order:
 
-### Steps
+  - Open Questions
 
-1. Panel opens with a slide-in animation from the right (200ms ease-out).
-2. Panel closes with reverse slide-out animation.
-3. When switching between two nodes (clicking one while another is open), crossfade the content rather than close-then-open.
-4. The close button (X) is always visible at top-right, even when content is scrolled.
-5. "Bring to sandbox" confirmation: brief visual feedback (button turns green + checkmark for 1s) after successful context restoration.
-6. "Reference node" feedback: brief highlight on the chat input to draw attention to where the quote was inserted.
-7. **Open question polish** (kind-specific UI):
-   - Top of the detail panel shows a banner: "This is an open question — no decision yet." (amber background, subtle icon).
-   - The "Bring to sandbox" button label changes to "Discuss this question" when the node is an open_question.
-   - The "Resolve as decision" button (introduced in Phase 2 Task 4) is rendered as the primary action — visually weightier than other buttons in Section 4.
-   - When the form is submitted and the open_question becomes superseded, the panel smoothly transitions to show the newly created decision (no flash to the tree).
+  - Goals
 
-### Acceptance
+  - Constraints
 
-- Panel transitions feel smooth, not janky.
-- Switching between nodes doesn't cause layout jumps.
-- Both action buttons provide clear feedback.
-- For an open_question node: the banner appears, "Discuss this question" replaces "Bring to sandbox", "Resolve as decision" is visually primary.
-- After resolving an open_question, the panel transitions to the new decision without a jarring close/reopen.
+  - Plans
 
----
+  - Hypotheses
 
-## Task 6: Candidate Inline Hint Animation
+  - Principles
 
-### What It Does
+  - Rejections (default collapsed)
+
+- Show count next to header: 'Goals (3)'
+
+- Empty sections hidden entirely — no 'Hypotheses (0)' empty header
+
+- Smooth expand/collapse animation (200-250ms ease)
+
+**2. By-relation view improvements**
+
+- Anchor decisions render as root nodes
+
+- depends_on edges render as indented children
+
+- resolved_by edges (open_question → decision) render with distinct visual indicator, e.g. '↳ resolved by' label
+
+- Orphan decisions (no edges) appear in a separate 'Standalone' section at the bottom
+
+
+> **Not in tree (removed from original spec)**
+
+> supersedes edges (version chain) are NOT rendered in any tree view. They appear only in the detail panel's version history section (Section 5).
+
+> No strikethrough on 'superseded nodes' because superseded nodes don't appear in the tree at all.
+
+
+
+**3. Status toggle — removed**
+
+
+> **Deleted from spec**
+
+> The original spec included a 2-state toggle ('Active only' / 'Show all'). This is removed.
+
+> The tree always shows active nodes only. There is no toggle, no 'Show all' mode, no dimmed superseded nodes.
+
+> Version history is accessible via the detail panel. The tree is always a clean view of current truth.
+
+
+
+**Acceptance**
+
+- By-type view: groups in priority order, empty groups hidden, counts shown, Rejections collapsed by default
+
+- By-relation view: depends_on as indented children; resolved_by edges with distinct visual treatment; orphans in Standalone section
+
+- No supersedes edges visible anywhere in the tree
+
+- No status toggle exists in the tree toolbar
+
+- Both view modes render cleanly with real data (10+ decisions, 5+ edges)
+
+- Sections collapse/expand smoothly with no layout jumps (200-250ms ease)
+
+**Task 5: Detail Panel Transition & Polish**
+
+**What It Does**
+
+Make the detail panel feel smooth and professional, with kind-specific affordances for open_question and version history transitions.
+
+
+> **Changes from original spec (design review 2026-04-26)**
+
+> 1. 'Bring to sandbox' button semantics updated — see Step 5 below.
+
+> 2. 'Reference node' button removed — merged into '拉入对话'.
+
+> 3. Version history accordion animation added as new sub-task (Step 7).
+
+
+
+**Steps**
+
+**1. Panel open/close animation**
+
+- Opens with slide-in from right (200ms ease-out)
+
+- Closes with reverse slide-out animation
+
+**2. Node switching**
+
+- When switching between two nodes (clicking one while another is open): crossfade content rather than close-then-open
+
+**3. Close button**
+
+- Always visible at top-right, even when content is scrolled
+
+**4. Open question polish (kind-specific UI)**
+
+- Top of panel: amber banner — 'This is an open question — no decision yet.'
+
+- '拉入对话' label changes to '讨论这个问题' when node is open_question
+
+- '解决为决策' button is visually primary (heavier weight than other buttons)
+
+- After resolving: panel smoothly transitions to newly created decision (no flash to tree)
+
+**5. '拉入对话' button feedback (updated semantics)**
+
+
+> **Updated from original 'Bring to sandbox'**
+
+> Original spec: 'Bring to sandbox' fetched relevant_message_ids and restored old conversation context.
+
+> Updated: '拉入对话' injects the node's structured content (title + content + because) as a contextual message into the CURRENT active conversation. This is the entry point for modifying any judgment.
+
+> Visual feedback: button briefly shows checkmark + green for 1s after successful injection, then returns to default state.
+
+> The chat area receives focus after injection so the user can immediately type a response.
+
+
+
+**6. '查看来源' button feedback**
+
+- Loads the conversation segment identified by created_from_message_id
+
+- If segment is in a past conversation: loads it as a read-only view (no new messages)
+
+- No brief highlight needed — navigation is feedback enough
+
+**7. Version history accordion animation (new)**
+
+- When the version history section (Section 5 from Phase 2 Task 4) is expanded/collapsed: smooth accordion (150-200ms ease), consistent with group collapse animation in the tree panel
+
+- When a single version row is expanded inline: same smooth accordion, content fades in (100ms)
+
+- No layout jump when expanding — reserve height or use transition on max-height
+
+**Acceptance**
+
+- Panel open/close and node-switch transitions feel smooth, not janky
+
+- Switching between nodes doesn't cause layout jumps
+
+- For open_question: amber banner appears; '讨论这个问题' replaces '拉入对话'; '解决为决策' is visually primary
+
+- After resolving open_question: panel transitions to new decision without close/reopen flash
+
+- '拉入对话' injects node content into current conversation (not old message restore); provides 1s visual feedback
+
+- Version history accordion and row expansion animate smoothly at 150-200ms, no layout jump
+
+- No 'Reference node' button exists — removed
+
+**Task 6: Candidate Inline Hint Animation**
+
+**What It Does**
 
 Polish the inline candidate hints from Phase 2.
 
-### Steps
+**Steps**
 
-1. When a new hint appears after extraction completes:
-   - Fade in over 0.5s.
-   - Brief subtle glow/highlight for 1s, then settle to resting style.
-2. Resting style: monospace, 80% opacity, small font.
-3. Click to expand: smooth accordion animation showing candidate previews.
-4. After batch confirm, transition the hint text from "+N candidates" to "✓ N confirmed" with a brief color change (default → green → settle to gray).
-5. **Agent-sourced hints** (candidates with `source = 'mcp_agent'`):
-   - These are NOT tied to a specific assistant message — they arrive at any time from external tools, often when the user is not actively chatting.
-   - Render as a separate notification at the top of the chat area (or wherever the candidate pool is visible), not anchored to an assistant message.
-   - Hint text format: `+N from {agent_name}` (e.g. "+2 from Claude Code"), pulled from `source_metadata.agent`.
-   - Same fade-in + glow animation. Same expand-to-preview behavior.
-   - On confirm, transitions to "✓ N from {agent_name} confirmed".
+**1. New hint appearance**
 
-### Acceptance
+- Fade in over 0.5s
 
-- Hint appearance is noticeable but not distracting.
-- Expand/collapse is smooth.
-- Confirmation state transition is visible and satisfying.
-- Hints from MCP-submitted candidates render distinctly ("+N from Claude Code") and are not incorrectly anchored to a chat message.
+- Brief subtle glow/highlight for 1s, then settle to resting style
 
----
+**2. Resting style**
 
-## Phase 3 Definition of Done
+- Monospace, 80% opacity, small font
+
+**3. Click to expand**
+
+- Smooth accordion animation showing candidate previews
+
+**4. After batch confirm**
+
+- Transition hint text from '+N candidates' to '✓ N confirmed'
+
+- Brief color change: default → green → settle to gray
+
+**5. Agent-sourced hints (source = 'mcp_agent')**
+
+- Not tied to a specific assistant message — can arrive any time from external tools
+
+- Render as separate notification at top of chat area (not anchored to an assistant message)
+
+- Hint text: '+N from {agent_name}' (e.g. '+2 from Claude Code'), pulled from source_metadata.agent
+
+- Same fade-in + glow animation; same expand-to-preview behavior
+
+- On confirm: transitions to '✓ N from {agent_name} confirmed'
+
+**Acceptance**
+
+- Hint appearance is noticeable but not distracting
+
+- Expand/collapse is smooth
+
+- Confirmation state transition is visible and satisfying
+
+- Hints from MCP-submitted candidates render distinctly ('+N from Claude Code') and are not anchored to a chat message
+
+**Phase 3 Definition of Done**
 
 The product feels like a real tool, not a prototype:
 
-1. Full project + topic navigation works.
-2. Sandbox clear / back / forward works.
-3. Streaming doesn't hijack the user's scroll position.
-4. Tree panel views are polished, with 7-kind priority ordering and the 2-state status toggle.
-5. Detail panel transitions are smooth; open_question nodes show their dedicated banner and primary "Resolve as decision" affordance.
-6. Candidate hints animate appropriately, including the distinct rendering for MCP-submitted candidates.
+- Full project + topic navigation works
 
-**The complete user story**:
-Sean (solo founder) logs in → creates a project → creates topics → chats with AI to think through product/strategy → decisions are extracted → reviews and confirms → decisions appear in tree (with open questions and rejections clearly marked) → switches to Claude Code, which reads the project's truth via MCP and starts implementing → during implementation, Claude Code discovers a constraint and submits a candidate back to Zeno → Sean returns to Zeno, sees the new candidate marked "via Claude Code", confirms it → next conversation in either environment reflects the updated truth.
+- Sandbox clear / back / forward works
 
-**After Phase 3, the product is ready for Sean to demonstrate to potential users and investors.**
+- Streaming doesn't hijack the user's scroll position
+
+- Tree panel views are polished: 7-kind priority ordering, no status toggle, no superseded nodes, no supersedes edges in tree
+
+- Detail panel transitions are smooth; open_question nodes show amber banner and primary '解决为决策' affordance; '拉入对话' injects node content into current conversation
+
+- Version history accordion animates smoothly (150-200ms)
+
+- Candidate hints animate appropriately, including distinct rendering for MCP-submitted candidates
+
+
+> **Complete user story**
+
+> Sean (solo founder) logs in → creates a project → creates topics → chats with AI to think through product/strategy → decisions extracted → reviews and confirms → decisions appear in tree (active only; open questions and rejections clearly marked) → switches to Claude Code, which reads the project's truth via MCP and starts implementing → during implementation, Claude Code discovers a constraint and submits a candidate back to Zeno → Sean returns to Zeno, sees the new candidate marked 'via Claude Code', confirms it → next conversation in either environment reflects the updated truth.
+
+> To modify a judgment: Sean clicks a tree node → '拉入对话' → discusses in sandbox → new candidate extracted with supersedes edge → confirms → old node disappears from tree, version history accessible in new node's detail panel.
+
+
+
+After Phase 3, the product is ready for Sean to demonstrate to potential users and investors.
+
+*ZENO · Phase 3 Spec · Updated 2026-04-26*
