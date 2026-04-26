@@ -3,7 +3,6 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { usePathname } from "next/navigation";
 import {
   createContext,
   type Dispatch,
@@ -21,6 +20,7 @@ import { useDataStream } from "@/components/chat/data-stream-provider";
 import { getChatHistoryPaginationKey } from "@/components/chat/sidebar-history";
 import { toast } from "@/components/chat/toast";
 import type { VisibilityType } from "@/components/chat/visibility-selector";
+import { useWorkspace } from "@/components/workspace/workspace-provider";
 import { useAutoResume } from "@/hooks/use-auto-resume";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import type { Vote } from "@/lib/db/schema";
@@ -51,27 +51,23 @@ type ActiveChatContextValue = {
 
 const ActiveChatContext = createContext<ActiveChatContextValue | null>(null);
 
-function extractChatId(pathname: string): string | null {
-  const match = pathname.match(/\/chat\/([^/]+)/);
-  return match ? match[1] : null;
-}
-
 export function ActiveChatProvider({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
   const { setDataStream } = useDataStream();
   const { mutate } = useSWRConfig();
+  const {
+    activeProjectId,
+    activeTopicId,
+    currentConversationId,
+    isArchivedTopicReadonly,
+    isLoading: isWorkspaceLoading,
+    consumeRestoredContextMessageIds,
+  } = useWorkspace();
 
-  const chatIdFromUrl = extractChatId(pathname);
-  const isNewChat = !chatIdFromUrl;
-  const newChatIdRef = useRef(generateUUID());
-  const prevPathnameRef = useRef(pathname);
-
-  if (isNewChat && prevPathnameRef.current !== pathname) {
-    newChatIdRef.current = generateUUID();
-  }
-  prevPathnameRef.current = pathname;
-
-  const chatId = chatIdFromUrl ?? newChatIdRef.current;
+  const fallbackChatIdRef = useRef(generateUUID());
+  const chatId = currentConversationId ?? fallbackChatIdRef.current;
+  const isWorkspaceReady = Boolean(
+    activeProjectId && activeTopicId && currentConversationId
+  );
 
   const [currentModelId, setCurrentModelId] = useState(DEFAULT_CHAT_MODEL);
   const currentModelIdRef = useRef(currentModelId);
@@ -127,19 +123,15 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
   }, [currentModelId, modelsData?.defaultModelId, modelsData?.models]);
 
   const { data: chatData, isLoading } = useSWR(
-    isNewChat
-      ? null
-      : `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/messages?chatId=${chatId}`,
+    isWorkspaceReady
+      ? `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/messages?chatId=${chatId}`
+      : null,
     fetcher,
     { revalidateOnFocus: false }
   );
 
-  const initialMessages: ChatMessage[] = isNewChat
-    ? []
-    : (chatData?.messages ?? []);
-  const visibility: VisibilityType = isNewChat
-    ? "private"
-    : (chatData?.visibility ?? "private");
+  const initialMessages: ChatMessage[] = chatData?.messages ?? [];
+  const visibility: VisibilityType = chatData?.visibility ?? "private";
 
   const {
     messages,
@@ -190,6 +182,12 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
               : { message: lastMessage }),
             selectedChatModel: currentModelIdRef.current,
             selectedVisibilityType: visibility,
+            projectId: activeProjectId,
+            topicId: activeTopicId,
+            conversationId: currentConversationId,
+            restoredContextMessageIds: isToolApprovalContinuation
+              ? []
+              : consumeRestoredContextMessageIds(),
             ...request.body,
           },
         };
@@ -215,34 +213,38 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const loadedChatIds = useRef(new Set<string>());
-
-  if (isNewChat && !loadedChatIds.current.has(newChatIdRef.current)) {
-    loadedChatIds.current.add(newChatIdRef.current);
-  }
-
-  useEffect(() => {
-    if (loadedChatIds.current.has(chatId)) {
-      return;
-    }
-    if (chatData?.messages) {
-      loadedChatIds.current.add(chatId);
-      setMessages(chatData.messages);
-    }
-  }, [chatId, chatData?.messages, setMessages]);
-
   const prevChatIdRef = useRef(chatId);
   useEffect(() => {
     if (prevChatIdRef.current !== chatId) {
       prevChatIdRef.current = chatId;
-      if (isNewChat) {
-        setMessages([]);
-      }
+      setMessages([]);
     }
-  }, [chatId, isNewChat, setMessages]);
+  }, [chatId, setMessages]);
+
+  useEffect(() => {
+    if (chatData?.messages) {
+      setMessages(chatData.messages);
+    }
+  }, [chatData?.messages, setMessages]);
+
+  useEffect(() => {
+    if (!currentConversationId) {
+      return;
+    }
+
+    const nextPath = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/chat/${currentConversationId}`;
+
+    if (window.location.pathname !== nextPath) {
+      window.history.replaceState({}, "", nextPath);
+    }
+  }, [currentConversationId]);
 
   const hasAppendedQueryRef = useRef(false);
   useEffect(() => {
+    if (!isWorkspaceReady) {
+      return;
+    }
+
     const params = new URLSearchParams(window.location.search);
     const query = params.get("query");
     if (query && !hasAppendedQueryRef.current) {
@@ -257,16 +259,16 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
         parts: [{ type: "text", text: query }],
       });
     }
-  }, [sendMessage, chatId]);
+  }, [sendMessage, chatId, isWorkspaceReady]);
 
   useAutoResume({
-    autoResume: !isNewChat && !!chatData,
+    autoResume: isWorkspaceReady && !!chatData,
     initialMessages,
     resumeStream,
     setMessages,
   });
 
-  const isReadonly = isNewChat ? false : (chatData?.isReadonly ?? false);
+  const isReadonly = isArchivedTopicReadonly || (chatData?.isReadonly ?? false);
 
   const { data: votes } = useSWR<Vote[]>(
     !isReadonly && messages.length >= 2
@@ -290,7 +292,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       setInput,
       visibilityType: visibility,
       isReadonly,
-      isLoading: !isNewChat && isLoading,
+      isLoading: isWorkspaceLoading || isLoading,
       votes,
       currentModelId,
       setCurrentModelId,
@@ -309,7 +311,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       input,
       visibility,
       isReadonly,
-      isNewChat,
+      isWorkspaceLoading,
       isLoading,
       votes,
       currentModelId,

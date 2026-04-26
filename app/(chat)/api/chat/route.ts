@@ -21,6 +21,7 @@ import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import { isProductionEnvironment } from "@/lib/constants";
+import { assembleContext } from "@/lib/context-assembly";
 import {
   createStreamId,
   deleteChatById,
@@ -33,10 +34,22 @@ import {
   updateMessage,
 } from "@/lib/db/queries";
 import type { DBMessage } from "@/lib/db/schema";
+import { extractDecisions } from "@/lib/decision-extraction";
 import { ChatbotError } from "@/lib/errors";
+import { buildDecisionContextBlock } from "@/lib/prompting";
 import { checkIpRateLimit } from "@/lib/ratelimit";
 import type { ChatMessage } from "@/lib/types";
-import { convertToUIMessages, generateUUID } from "@/lib/utils";
+import {
+  convertToUIMessages,
+  generateUUID,
+  getTextFromMessage,
+} from "@/lib/utils";
+import { saveWorkspaceMessages } from "@/lib/workspace/queries";
+import {
+  ensureWorkspaceSelectionForUser,
+  getWorkspaceMessagesForSandbox,
+} from "@/lib/workspace/service";
+import type { WorkspaceMessageRecord } from "@/lib/workspace/types";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
@@ -63,8 +76,17 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { id, message, messages, selectedChatModel, selectedVisibilityType } =
-      requestBody;
+    const {
+      message,
+      messages,
+      selectedChatModel,
+      selectedVisibilityType,
+      projectId,
+      topicId,
+      conversationId,
+      restoredContextMessageIds = [],
+    } = requestBody;
+    const id = conversationId;
 
     const [, session] = await Promise.all([
       checkBotId().catch(() => null),
@@ -103,6 +125,14 @@ export async function POST(request: Request) {
     }
 
     const isToolApprovalFlow = Boolean(messages);
+
+    const workspaceSelection = await ensureWorkspaceSelectionForUser({
+      userId: session.user.id,
+      projectId,
+      topicId,
+      conversationId,
+    });
+    const shouldInjectWorkspaceContext = !workspaceSelection.topic.isGeneral;
 
     const chat = await getChatById({ id });
     let messagesFromDb: DBMessage[] = [];
@@ -183,6 +213,18 @@ export async function POST(request: Request) {
           },
         ],
       });
+
+      await saveWorkspaceMessages([
+        {
+          id: message.id,
+          conversationId,
+          topicId,
+          projectId,
+          role: "user",
+          content: getTextFromMessage(message),
+          createdAt: new Date().toISOString(),
+        },
+      ]);
     }
 
     const modelCapabilities = getCapabilities(process.env);
@@ -191,13 +233,41 @@ export async function POST(request: Request) {
     const supportsTools = capabilities?.tools === true;
 
     const modelMessages = await convertToModelMessages(uiMessages);
+    const [decisionContext, restoredWorkspaceMessages] = await Promise.all([
+      shouldInjectWorkspaceContext
+        ? assembleContext(topicId, projectId)
+        : Promise.resolve(""),
+      restoredContextMessageIds.length > 0
+        ? getWorkspaceMessagesForSandbox({
+            userId: session.user.id,
+            messageIds: restoredContextMessageIds,
+          })
+        : Promise.resolve([]),
+    ]);
+    const restoredContextBlock =
+      restoredWorkspaceMessages.length > 0
+        ? `<restored_context>\n${restoredWorkspaceMessages
+            .map(
+              (currentMessage: WorkspaceMessageRecord) =>
+                `[${currentMessage.id}] ${currentMessage.role.toUpperCase()}: ${currentMessage.content}`
+            )
+            .join("\n")}\n</restored_context>`
+        : "";
 
     const stream = createUIMessageStream({
       originalMessages: isToolApprovalFlow ? uiMessages : undefined,
       execute: async ({ writer: dataStream }) => {
         const result = streamText({
           model: getLanguageModel(chatModel),
-          system: systemPrompt({ requestHints, supportsTools }),
+          system: [
+            systemPrompt({ requestHints, supportsTools }),
+            shouldInjectWorkspaceContext
+              ? buildDecisionContextBlock(decisionContext)
+              : "",
+            restoredContextBlock,
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
           messages: modelMessages,
           stopWhen: stepCountIs(5),
           experimental_activeTools:
@@ -288,6 +358,46 @@ export async function POST(request: Request) {
               attachments: [],
               chatId: id,
             })),
+          });
+        }
+
+        const workspaceMessages = finishedMessages
+          .filter(
+            (currentMessage) =>
+              currentMessage.role === "assistant" ||
+              currentMessage.role === "user" ||
+              currentMessage.role === "system"
+          )
+          .map((currentMessage) => ({
+            id: currentMessage.id,
+            conversationId,
+            topicId,
+            projectId,
+            role: currentMessage.role as "user" | "assistant" | "system",
+            content: getTextFromMessage(currentMessage),
+            model: currentMessage.role === "assistant" ? chatModel : null,
+            createdAt:
+              currentMessage.metadata?.createdAt ?? new Date().toISOString(),
+          }));
+
+        await saveWorkspaceMessages(workspaceMessages);
+
+        const assistantMessages = finishedMessages.filter(
+          (currentMessage) =>
+            currentMessage.role === "assistant" &&
+            getTextFromMessage(currentMessage).trim().length > 0
+        );
+
+        const lastAssistantMessage = assistantMessages.at(-1);
+
+        if (shouldInjectWorkspaceContext && lastAssistantMessage) {
+          after(() => {
+            extractDecisions({
+              conversationId,
+              topicId,
+              projectId,
+              messageId: lastAssistantMessage.id,
+            }).catch(console.error);
           });
         }
       },

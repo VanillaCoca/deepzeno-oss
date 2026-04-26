@@ -30,6 +30,7 @@ import {
   ModelSelectorName,
   ModelSelectorTrigger,
 } from "@/components/ai-elements/model-selector";
+import { useWorkspace } from "@/components/workspace/workspace-provider";
 import {
   type ChatModel,
   chatModels,
@@ -103,9 +104,11 @@ function PureMultimodalInput({
 }) {
   const router = useRouter();
   const { setTheme, resolvedTheme } = useTheme();
+  const { consumeReferenceDraft, referenceDraft } = useWorkspace();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { width } = useWindowSize();
   const hasAutoFocused = useRef(false);
+  const [shouldHighlightInput, setShouldHighlightInput] = useState(false);
   useEffect(() => {
     if (!hasAutoFocused.current && width) {
       const timer = setTimeout(() => {
@@ -132,6 +135,37 @@ function PureMultimodalInput({
   useEffect(() => {
     setLocalStorageInput(input);
   }, [input, setLocalStorageInput]);
+
+  useEffect(() => {
+    if (!referenceDraft) {
+      return;
+    }
+
+    const draft = consumeReferenceDraft();
+    if (!draft) {
+      return;
+    }
+
+    const selectionStart = textareaRef.current?.selectionStart ?? input.length;
+    const selectionEnd = textareaRef.current?.selectionEnd ?? input.length;
+
+    setInput((current) => {
+      return `${current.slice(0, selectionStart)}${draft.text}${current.slice(selectionEnd)}`;
+    });
+    setShouldHighlightInput(true);
+    textareaRef.current?.focus();
+
+    requestAnimationFrame(() => {
+      const cursor = selectionStart + draft.text.length;
+      textareaRef.current?.setSelectionRange(cursor, cursor);
+    });
+
+    const timeout = window.setTimeout(() => {
+      setShouldHighlightInput(false);
+    }, 1000);
+
+    return () => window.clearTimeout(timeout);
+  }, [consumeReferenceDraft, input.length, referenceDraft, setInput]);
 
   const handleInput = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = event.target.value;
@@ -413,8 +447,18 @@ function PureMultimodalInput({
       </div>
 
       <PromptInput
-        className="[&>div]:rounded-2xl [&>div]:border [&>div]:border-border/30 [&>div]:bg-card/70 [&>div]:shadow-[var(--shadow-composer)] [&>div]:transition-shadow [&>div]:duration-300 [&>div]:focus-within:shadow-[var(--shadow-composer-focus)]"
+        className={cn(
+          "[&>div]:rounded-2xl [&>div]:border [&>div]:border-border/30 [&>div]:bg-card/70 [&>div]:shadow-[var(--shadow-composer)] [&>div]:transition-shadow [&>div]:duration-300 [&>div]:focus-within:shadow-[var(--shadow-composer-focus)]",
+          shouldHighlightInput &&
+            "[&>div]:ring-2 [&>div]:ring-foreground/15 [&>div]:shadow-[var(--shadow-composer-focus)]"
+        )}
         onSubmit={() => {
+          if (isLoading) {
+            toast.error(
+              "Workspace is still loading. Please try again in a moment."
+            );
+            return;
+          }
           if (input.startsWith("/")) {
             const query = input.slice(1).trim();
             const cmd = slashCommands.find((c) => c.name === query);
@@ -469,6 +513,7 @@ function PureMultimodalInput({
         <PromptInputTextarea
           className="min-h-24 text-[13px] leading-relaxed px-4 pt-3.5 pb-1.5 placeholder:text-muted-foreground/35"
           data-testid="multimodal-input"
+          disabled={Boolean(isLoading)}
           onChange={handleInput}
           onKeyDown={(e) => {
             if (slashOpen) {
@@ -504,7 +549,11 @@ function PureMultimodalInput({
             }
           }}
           placeholder={
-            editingMessage ? "Edit your message..." : "Ask anything..."
+            isLoading
+              ? "Loading workspace..."
+              : editingMessage
+                ? "Edit your message..."
+                : "Ask anything..."
           }
           ref={textareaRef}
           value={input}
@@ -533,7 +582,9 @@ function PureMultimodalInput({
                   : "bg-muted text-muted-foreground/25 cursor-not-allowed"
               )}
               data-testid="send-button"
-              disabled={!input.trim() || uploadQueue.length > 0}
+              disabled={
+                !input.trim() || uploadQueue.length > 0 || Boolean(isLoading)
+              }
               status={status}
               variant="secondary"
             >

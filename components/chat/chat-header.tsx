@@ -1,10 +1,16 @@
 "use client";
 
-import { PanelLeftIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  EraserIcon,
+  PanelLeftIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/components/ui/sidebar";
+import { useWorkspace } from "@/components/workspace/workspace-provider";
 import { VercelIcon } from "./icons";
 import { VisibilitySelector, type VisibilityType } from "./visibility-selector";
 
@@ -18,6 +24,14 @@ function PureChatHeader({
   isReadonly: boolean;
 }) {
   const { state, toggleSidebar, isMobile } = useSidebar();
+  const {
+    activeTopic,
+    canGoBack,
+    canGoForward,
+    clearConversation,
+    goBack,
+    goForward,
+  } = useWorkspace();
 
   if (state === "collapsed" && !isMobile) {
     return null;
@@ -44,11 +58,52 @@ function PureChatHeader({
       </Link>
 
       {!isReadonly && (
-        <VisibilitySelector
-          chatId={chatId}
-          selectedVisibilityType={selectedVisibilityType}
-        />
+        <>
+          <VisibilitySelector
+            chatId={chatId}
+            selectedVisibilityType={selectedVisibilityType}
+          />
+          <div className="hidden items-center gap-1 md:flex">
+            <Button
+              disabled={!canGoBack}
+              onClick={goBack}
+              size="sm"
+              variant="ghost"
+            >
+              <ArrowLeftIcon className="size-4" />
+              Back
+            </Button>
+            <Button
+              disabled={!canGoForward}
+              onClick={goForward}
+              size="sm"
+              variant="ghost"
+            >
+              <ArrowRightIcon className="size-4" />
+              Forward
+            </Button>
+            <Button
+              onClick={() => {
+                clearConversation().catch(console.error);
+              }}
+              size="sm"
+              variant="outline"
+            >
+              <EraserIcon className="size-4" />
+              Clear
+            </Button>
+          </div>
+        </>
       )}
+
+      <div className="ml-2 hidden min-w-0 md:block">
+        <p className="truncate text-sm font-medium text-foreground">
+          {activeTopic?.label ?? "Workspace"}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {activeTopic?.archivedAt ? "Archived topic" : "Active topic"}
+        </p>
+      </div>
 
       <Button
         asChild

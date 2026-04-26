@@ -12,6 +12,7 @@ import {
   ToolInput,
   ToolOutput,
 } from "../ai-elements/tool";
+import { CandidateHint } from "../candidate-hint";
 import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
@@ -325,6 +326,7 @@ const PurePreviewMessage = ({
     <>
       {attachments}
       {parts}
+      {isAssistant ? <CandidateHint messageId={message.id} /> : null}
       {actions}
     </>
   );
@@ -335,8 +337,10 @@ const PurePreviewMessage = ({
         "group/message w-full",
         !isAssistant && "animate-[fade-up_0.25s_cubic-bezier(0.22,1,0.36,1)]"
       )}
+      data-message-id={message.id}
       data-role={message.role}
       data-testid={`message-${message.role}`}
+      id={`message-${message.id}`}
     >
       <div
         className={cn(

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { ProjectSidebar } from "./project-sidebar";
+import { TruthPanel } from "./truth-panel";
 
 export function WorkspaceShell({
   children,
@@ -52,7 +53,9 @@ export function WorkspaceShell({
                 <p className="text-sm font-semibold text-foreground">
                   Truth Panel
                 </p>
-                <p className="text-xs text-muted-foreground">Phase 2</p>
+                <p className="text-xs text-muted-foreground">
+                  Candidate review and decision graph
+                </p>
               </div>
               <Button
                 onClick={() => setIsTruthPanelOpen(false)}
@@ -63,11 +66,7 @@ export function WorkspaceShell({
               </Button>
             </div>
 
-            <div className="flex flex-1 flex-col gap-4 p-4">
-              <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-border/60 bg-background/70 px-6 text-center text-sm text-muted-foreground">
-                Truth Panel — Phase 2
-              </div>
-            </div>
+            <TruthPanel />
           </aside>
 
           {!showTruthPanel && (
