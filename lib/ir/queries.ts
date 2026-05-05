@@ -7,6 +7,11 @@ import {
   getTopicByIdForUser,
 } from "@/lib/workspace/queries";
 import {
+  validateImportedIRCreation,
+  validateStandardIRCreation,
+} from "./creation-guards";
+import type { ImportConfirmRow, ImportStatus } from "./import-types";
+import {
   getIRPrefix,
   type IRCreatedBy,
   type IRDetail,
@@ -42,6 +47,16 @@ export class IRConflictError extends Error {
 
 export class IRNotReadyError extends Error {
   statusCode = 503;
+}
+
+export class IRImportPartialFailureError extends Error {
+  statusCode = 500;
+  readonly persistedRows: IRNode[];
+
+  constructor(message: string, persistedRows: IRNode[]) {
+    super(message);
+    this.persistedRows = persistedRows;
+  }
 }
 
 function getClient(): any {
@@ -120,6 +135,7 @@ function mapIRNode(row: DatabaseRecord): IRNode {
     sourceTurnId: toNullableString(row.source_turn_id),
     sourceTextSpan: toNullableString(row.source_text_span),
     sourceLayer: toNullableString(row.source_layer) as IRSourceLayer | null,
+    importSessionId: toNullableString(row.import_session_id),
     reactivationAnchorId: toNullableString(row.reactivation_anchor_id),
     extractionConfidence: toNullableNumber(row.extraction_confidence),
     createdAt: toIsoString(row.created_at),
@@ -467,18 +483,13 @@ export async function createIRNodeForUser({
     throw new ChatbotError("bad_request:api", "Invalid IR kind/subtype");
   }
 
-  if (initialStatus === "idea" && sourceLayer !== "sweep") {
-    throw new ChatbotError(
-      "bad_request:api",
-      "Only sweep extraction can create idea nodes"
-    );
-  }
+  const creationGuard = validateStandardIRCreation({
+    sourceLayer,
+    initialStatus,
+  });
 
-  if (sourceLayer === "mcp" && initialStatus !== "pending") {
-    throw new ChatbotError(
-      "bad_request:api",
-      "MCP writers can only create pending candidates"
-    );
+  if (!creationGuard.ok) {
+    throw new ChatbotError("bad_request:api", creationGuard.message);
   }
 
   await validateRelationTargets({ projectId, relations });
@@ -549,6 +560,143 @@ export async function createIRNodeForUser({
   });
 
   return node;
+}
+
+export async function createImportedIRNodesForUser({
+  userId,
+  projectId,
+  topicId,
+  importSessionId,
+  rows,
+  confirmationSource,
+}: {
+  userId: string;
+  projectId: string;
+  topicId?: string | null;
+  importSessionId: string;
+  rows: ImportConfirmRow[];
+  confirmationSource?: "review_truth_row" | "confirm_all_modal";
+}) {
+  await assertProjectAccess(userId, projectId);
+  await assertTopicAccess({ userId, projectId, topicId });
+
+  if (!importSessionId) {
+    throw new ChatbotError("bad_request:api", "import_session_id is required");
+  }
+
+  for (const row of rows) {
+    if (row.action_state === "dismissed") {
+      continue;
+    }
+
+    if (!validateIRKindSubtype(row.kind, row.subtype)) {
+      throw new ChatbotError("bad_request:api", "Invalid IR kind/subtype");
+    }
+
+    if (!row.source_text_span.trim()) {
+      throw new ChatbotError("bad_request:api", "source_text_span is required");
+    }
+
+    if (row.final_status === "active" && !confirmationSource) {
+      throw new ChatbotError(
+        "bad_request:api",
+        "Active import rows require explicit confirmation metadata"
+      );
+    }
+
+    const importGuard = validateImportedIRCreation({
+      sourceLayer: "manual",
+      createdBy: "user",
+      status: row.final_status as ImportStatus,
+      importSessionId,
+    });
+
+    if (!importGuard.ok) {
+      throw new ChatbotError("bad_request:api", importGuard.message);
+    }
+  }
+
+  const now = new Date().toISOString();
+  const persistedRows: IRNode[] = [];
+
+  try {
+    for (const row of rows) {
+      if (row.action_state === "dismissed") {
+        continue;
+      }
+
+      const existingRow = await ensureResult<DatabaseRecord | null>(
+        getClient()
+          .from("ir_nodes")
+          .select("*")
+          .eq("project_id", projectId)
+          .eq("import_session_id", importSessionId)
+          .eq("source_text_span", row.source_text_span)
+          .maybeSingle(),
+        "Failed to inspect imported IR retry state"
+      );
+
+      if (existingRow) {
+        persistedRows.push(mapIRNode(existingRow));
+        continue;
+      }
+
+      const nodeId = await getNextIRId({
+        kind: row.kind,
+        subtype: row.subtype,
+      });
+      const isActive = row.final_status === "active";
+      const inserted = await ensureResult<DatabaseRecord>(
+        getClient()
+          .from("ir_nodes")
+          .insert({
+            id: nodeId,
+            project_id: projectId,
+            topic_id: topicId ?? null,
+            kind: row.kind,
+            subtype: row.subtype,
+            status: row.final_status,
+            title: row.title.trim().slice(0, 200),
+            content: row.content,
+            rationale: row.rationale,
+            sensitivity: "normal",
+            source_text_span: row.source_text_span,
+            source_layer: "manual",
+            import_session_id: importSessionId,
+            created_by: "user",
+            confirmed_at: isActive ? now : null,
+            confirmed_by: isActive ? userId : null,
+          })
+          .select("*")
+          .single(),
+        "Failed to create imported IR node"
+      );
+      const node = mapIRNode(inserted);
+      persistedRows.push(node);
+
+      await logIREvent({
+        projectId,
+        topicId: topicId ?? null,
+        nodeId: node.id,
+        event: "import_row_action",
+        layer: "manual",
+        metadata: {
+          importSessionId,
+          clientId: row.client_id,
+          status: row.final_status,
+          actionState: row.action_state,
+          confirmationSource: isActive ? confirmationSource : null,
+        },
+      });
+    }
+  } catch (error) {
+    throw new IRImportPartialFailureError(
+      error instanceof Error ? error.message : "Import persistence failed",
+      persistedRows
+    );
+  }
+
+  return persistedRows;
 }
 
 export async function promoteIRNodeForUser({
@@ -623,10 +771,10 @@ export async function confirmIRNodeForUser({
     confirmed_at: now,
     confirmed_by: userId,
     ...(edits?.title ? { title: edits.title.trim().slice(0, 200) } : {}),
-    ...(edits?.content !== undefined ? { content: edits.content } : {}),
-    ...(edits?.rationale !== undefined ? { rationale: edits.rationale } : {}),
+    ...(edits?.content === undefined ? {} : { content: edits.content }),
+    ...(edits?.rationale === undefined ? {} : { rationale: edits.rationale }),
     ...(edits?.kind ? { kind } : {}),
-    ...(edits?.subtype !== undefined ? { subtype } : {}),
+    ...(edits?.subtype === undefined ? {} : { subtype }),
     ...(edits?.sensitivity ? { sensitivity: edits.sensitivity } : {}),
   };
   const row = await ensureResult<DatabaseRecord>(
@@ -889,9 +1037,9 @@ export async function upsertChatSessionSweepState({
         {
           chat_session_id: chatSessionId,
           last_sweep_at_turn: lastSweepAtTurn,
-          ...(reactivationAnchorId !== undefined
-            ? { reactivation_anchor_id: reactivationAnchorId }
-            : {}),
+          ...(reactivationAnchorId === undefined
+            ? {}
+            : { reactivation_anchor_id: reactivationAnchorId }),
           updated_at: new Date().toISOString(),
         },
         { onConflict: "chat_session_id" }

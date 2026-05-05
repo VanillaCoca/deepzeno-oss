@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { ChatbotError } from "@/lib/errors";
-import { IRConflictError, IRNotReadyError } from "@/lib/ir/queries";
+import {
+  IRConflictError,
+  IRImportPartialFailureError,
+  IRNotReadyError,
+} from "@/lib/ir/queries";
 import {
   irCreatedByValues,
   irKinds,
@@ -58,6 +62,17 @@ export function irErrorToResponse(error: unknown, fallbackMessage: string) {
         message: error.message,
         nodes: [],
         edges: [],
+      },
+      { status: error.statusCode }
+    );
+  }
+
+  if (error instanceof IRImportPartialFailureError) {
+    return Response.json(
+      {
+        code: "partial_failure:ir_import",
+        message: error.message,
+        persisted_rows: error.persistedRows,
       },
       { status: error.statusCode }
     );

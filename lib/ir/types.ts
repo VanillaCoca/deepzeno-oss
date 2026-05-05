@@ -54,6 +54,7 @@ export type IRNode = {
   sourceTurnId: string | null;
   sourceTextSpan: string | null;
   sourceLayer: IRSourceLayer | null;
+  importSessionId: string | null;
   reactivationAnchorId: string | null;
   extractionConfidence: number | null;
   createdAt: string;

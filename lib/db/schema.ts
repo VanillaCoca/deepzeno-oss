@@ -331,6 +331,7 @@ export const irNode = pgTable("ir_nodes", {
   sourceTurnId: uuid("source_turn_id"),
   sourceTextSpan: text("source_text_span"),
   sourceLayer: text("source_layer"),
+  importSessionId: uuid("import_session_id"),
   reactivationAnchorId: text("reactivation_anchor_id"),
   extractionConfidence: real("extraction_confidence"),
   createdAt: timestamp("created_at", { withTimezone: true })

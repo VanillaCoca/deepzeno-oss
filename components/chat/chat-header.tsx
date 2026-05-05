@@ -7,6 +7,7 @@ import {
   SparklesIcon,
 } from "lucide-react";
 import { memo, useState } from "react";
+import { IRBulkImportDialog } from "@/components/ir/ir-bulk-import-dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -120,6 +121,13 @@ function PureChatHeader({
             <SparklesIcon className="size-4" />
             {isExploring ? "Reviewing..." : "Explore new idea"}
           </Button>
+          <IRBulkImportDialog
+            disabled={
+              !activeProjectId ||
+              !activeTopicId ||
+              Boolean(activeTopic?.archivedAt)
+            }
+          />
         </div>
       )}
 

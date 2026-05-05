@@ -37,7 +37,7 @@ import type {
   IRNode,
   IRPlanSubtype,
 } from "@/lib/ir/types";
-import { getIRTypeLabel, truncateIRTitle } from "@/lib/ir/types";
+import { getIRTypeLabel } from "@/lib/ir/types";
 import { cn, fetcher } from "@/lib/utils";
 
 type TruthMode = "type" | "relation";
@@ -151,63 +151,67 @@ async function postJSON<T>(path: string, body?: Record<string, unknown>) {
 
 function StatusBadge({ status }: { status: IRNode["status"] }) {
   return (
-    <span
-      className={cn(
-        "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em]",
-        status === "active" && "bg-emerald-500/10 text-emerald-700",
-        status === "pending" && "bg-blue-500/10 text-blue-700",
-        status === "idea" && "bg-zinc-500/10 text-zinc-600",
-        status === "superseded" && "bg-muted text-muted-foreground",
-        status === "dismissed" && "bg-destructive/10 text-destructive"
-      )}
-    >
+    <span className="text-[11px] lowercase text-[var(--ir-text-secondary)]">
       {status}
     </span>
   );
 }
 
+function getNodeTypeLabel(node: IRNode) {
+  if (node.kind === "plan") {
+    return node.subtype ?? "plan";
+  }
+
+  if (node.kind === "unclassified") {
+    return "?";
+  }
+
+  return node.kind.replace("_", " ");
+}
+
 function NodeButton({
   node,
-  prefix,
   selected,
   onSelect,
-  tone = "default",
 }: {
   node: IRNode;
-  prefix?: string;
   selected: boolean;
   onSelect: (id: string) => void;
-  tone?: "default" | "candidate" | "idea";
 }) {
   return (
     <button
       className={cn(
-        "flex min-h-9 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/70",
-        selected && "bg-muted text-foreground",
-        tone === "candidate" &&
-          "border border-dashed border-blue-300 bg-blue-50/70 text-blue-950 hover:bg-blue-100/70",
-        tone === "idea" && "text-muted-foreground"
+        "relative block w-full border-b border-[var(--ir-border-default)] px-3.5 py-2.5 text-left transition-colors hover:bg-[var(--ir-bg-hover)]",
+        selected &&
+          "bg-[var(--ir-bg-hover)] before:absolute before:left-0 before:top-0 before:h-full before:w-0.5 before:bg-[var(--ir-accent-blue)]"
       )}
       onClick={() => onSelect(node.id)}
       title={node.title}
       type="button"
     >
-      {prefix ? (
-        <span className="shrink-0 text-muted-foreground">{prefix}</span>
-      ) : null}
-      <span
+      <div className="flex items-center gap-2">
+        <span
+          className={cn(
+            "text-[11px] lowercase tracking-[0.02em] text-[var(--ir-text-tertiary)]",
+            node.kind === "unclassified" && "text-[var(--ir-warning-fg)]"
+          )}
+        >
+          {getNodeTypeLabel(node)}
+        </span>
+        <span className="font-[var(--ir-font-mono)] text-xs text-[var(--ir-text-secondary)]">
+          {node.id}
+        </span>
+      </div>
+      <div
         className={cn(
-          "min-w-0 flex-1 truncate",
-          node.status === "superseded" && "text-muted-foreground line-through"
+          "ir-row-title mt-1 text-sm font-normal leading-[1.4] text-[var(--ir-text-primary)]",
+          node.status === "superseded" &&
+            "text-[var(--ir-text-tertiary)] line-through",
+          node.status === "idea" && "text-[var(--ir-text-tertiary)]"
         )}
       >
-        {node.id} · {truncateIRTitle(node.title, 60)}
-      </span>
-      {node.kind === "unclassified" ? (
-        <span className="rounded border border-amber-300 bg-amber-50 px-1 text-[10px] text-amber-700">
-          ?
-        </span>
-      ) : null}
+        {node.title}
+      </div>
     </button>
   );
 }
@@ -231,7 +235,7 @@ function ZoneHeader({
 
   return (
     <button
-      className="flex h-8 w-full items-center gap-2 px-1 text-left text-xs font-semibold text-muted-foreground uppercase tracking-[0.08em]"
+      className="flex h-8 w-full items-center gap-2 px-1 text-left text-[13px] font-medium text-[var(--ir-text-secondary)]"
       onClick={onToggle}
       type="button"
     >
@@ -241,7 +245,7 @@ function ZoneHeader({
         <ChevronRightIcon className="size-3.5" />
       )}
       <span>{label}</span>
-      <span className="text-muted-foreground/70">({count})</span>
+      <span className="text-[var(--ir-text-tertiary)]">({count})</span>
     </button>
   );
 }
@@ -258,11 +262,13 @@ function DetailRelationList({
   );
 
   if (detail.edges.length === 0) {
-    return <p className="text-sm text-muted-foreground">No relations.</p>;
+    return (
+      <p className="text-sm text-[var(--ir-text-tertiary)]">No relations.</p>
+    );
   }
 
   return (
-    <div className="space-y-2">
+    <div>
       {detail.edges.map((edge) => {
         const isOutgoing = edge.fromNode === detail.node.id;
         const targetId = isOutgoing ? edge.toNode : edge.fromNode;
@@ -270,15 +276,15 @@ function DetailRelationList({
 
         return (
           <button
-            className="flex w-full items-center gap-2 rounded-md border border-border/50 px-2 py-1.5 text-left text-sm hover:bg-muted/60"
+            className="flex w-full items-center gap-2 border-b border-[var(--ir-border-default)] px-1 py-2 text-left text-sm hover:bg-[var(--ir-bg-hover)]"
             key={edge.id}
             onClick={() => onSelect(targetId)}
             type="button"
           >
-            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            <span className="text-[11px] lowercase text-[var(--ir-text-tertiary)]">
               {isOutgoing ? edge.relation : `${edge.relation} by`}
             </span>
-            <span className="min-w-0 flex-1 truncate">
+            <span className="min-w-0 flex-1 text-[var(--ir-text-primary)]">
               {targetId} · {related?.title ?? "Unknown"}
             </span>
           </button>
@@ -533,17 +539,17 @@ export function IRPanel() {
 
   return (
     <div
-      className="flex min-h-0 flex-1 flex-col"
+      className="flex min-h-0 flex-1 flex-col bg-[var(--ir-bg-panel)] text-[var(--ir-text-primary)]"
       data-testid="ir-panel"
       ref={panelRef}
     >
-      <div className="border-b border-border/40 px-3 py-2 text-xs text-muted-foreground">
+      <div className="border-b border-[var(--ir-border-default)] px-3 py-2 text-xs text-[var(--ir-text-tertiary)]">
         Since last visit: {candidates.length} ·{" "}
-        {candidates.length > 0 ? "1 ⚠" : "0 ⚠"}
+        {candidates.length > 0 ? "1 warning" : "0 warnings"}
       </div>
 
       <div
-        className="flex min-h-0 flex-col overflow-y-auto px-3 py-2"
+        className="flex min-h-0 flex-col overflow-y-auto px-0 py-2"
         style={{ flexBasis: `${listPanePercent}%` }}
       >
         <ZoneHeader
@@ -554,20 +560,18 @@ export function IRPanel() {
           onToggle={() => setIdeasExpanded((current) => !current)}
         />
         {ideasExpanded ? (
-          <div className="mb-2 space-y-1" data-testid="ir-ideas-zone">
+          <div className="mb-2" data-testid="ir-ideas-zone">
             {ideas.slice(0, 10).map((node) => (
               <NodeButton
                 key={node.id}
                 node={node}
                 onSelect={selectNode}
-                prefix="⨀"
                 selected={selectedNodeId === node.id}
-                tone="idea"
               />
             ))}
             {ideas.length > 10 ? (
               <button
-                className="px-2 text-xs text-muted-foreground"
+                className="px-3.5 py-2 text-xs text-[var(--ir-text-tertiary)]"
                 type="button"
               >
                 + {ideas.length - 10} more
@@ -583,9 +587,9 @@ export function IRPanel() {
           onToggle={() => setCandidatesExpanded((current) => !current)}
         />
         {candidatesExpanded ? (
-          <div className="mb-3 space-y-1" data-testid="ir-candidates-zone">
+          <div className="mb-3" data-testid="ir-candidates-zone">
             {candidates.length === 0 && !isLoading ? (
-              <p className="px-2 py-2 text-sm text-muted-foreground">
+              <p className="px-3.5 py-2 text-sm text-[var(--ir-text-tertiary)]">
                 No pending candidates.
               </p>
             ) : null}
@@ -594,32 +598,41 @@ export function IRPanel() {
                 key={node.id}
                 node={node}
                 onSelect={selectNode}
-                prefix="◇"
                 selected={selectedNodeId === node.id}
-                tone="candidate"
               />
             ))}
           </div>
         ) : null}
 
-        <div className="sticky top-0 z-10 border-y border-border/40 bg-muted/35 py-2">
+        <div className="sticky top-0 z-10 border-y border-[var(--ir-border-default)] bg-[var(--ir-bg-panel)] px-3 py-2">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Truth
+            <p className="text-[13px] font-medium text-[var(--ir-text-secondary)]">
+              Truth{" "}
+              <span className="text-[var(--ir-text-tertiary)]">
+                ({truth.length})
+              </span>
             </p>
-            <div className="flex rounded-md border border-border/60 bg-background p-0.5">
+            <div className="flex rounded border border-[var(--ir-border-strong)] bg-transparent">
               <Button
+                className={cn(
+                  "h-7 rounded-none border-0 bg-transparent text-xs hover:bg-[var(--ir-bg-hover)]",
+                  truthMode === "type" && "bg-[var(--ir-bg-hover)]"
+                )}
                 onClick={() => setTruthMode("type")}
                 size="xs"
-                variant={truthMode === "type" ? "secondary" : "ghost"}
+                variant="ghost"
               >
                 <ListTreeIcon className="size-3" />
                 Type
               </Button>
               <Button
+                className={cn(
+                  "h-7 rounded-none border-0 bg-transparent text-xs hover:bg-[var(--ir-bg-hover)]",
+                  truthMode === "relation" && "bg-[var(--ir-bg-hover)]"
+                )}
                 onClick={() => setTruthMode("relation")}
                 size="xs"
-                variant={truthMode === "relation" ? "secondary" : "ghost"}
+                variant="ghost"
               >
                 <GitBranchIcon className="size-3" />
                 Relation
@@ -627,9 +640,9 @@ export function IRPanel() {
             </div>
           </div>
           <div className="relative">
-            <SearchIcon className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <SearchIcon className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-[var(--ir-text-tertiary)]" />
             <Input
-              className="h-8 rounded-md pl-7 text-xs"
+              className="h-8 rounded border-[var(--ir-border-default)] bg-[var(--ir-bg-elevated)] pl-7 text-xs focus-visible:ring-0"
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search"
               value={search}
@@ -637,7 +650,7 @@ export function IRPanel() {
           </div>
         </div>
 
-        <div className="space-y-1 py-2" data-testid="ir-truth-zone">
+        <div className="py-2" data-testid="ir-truth-zone">
           {truthMode === "relation" && relationModeNodes.length > 0
             ? relationModeNodes.map((node) => (
                 <NodeButton
@@ -650,7 +663,7 @@ export function IRPanel() {
             : null}
 
           {truthMode === "relation" && relationModeNodes.length === 0 ? (
-            <p className="px-2 py-2 text-sm text-muted-foreground">
+            <p className="px-3.5 py-2 text-sm text-[var(--ir-text-tertiary)]">
               Select a truth node to inspect relations.
             </p>
           ) : null}
@@ -670,7 +683,7 @@ export function IRPanel() {
                 return (
                   <div key={group.key}>
                     <button
-                      className="flex h-8 w-full items-center gap-2 px-1 text-left text-xs font-medium text-muted-foreground"
+                      className="flex h-8 w-full items-center gap-2 px-3.5 text-left text-[13px] font-medium text-[var(--ir-text-secondary)]"
                       onClick={() =>
                         setCollapsedGroups((current) => ({
                           ...current,
@@ -685,7 +698,9 @@ export function IRPanel() {
                         <ChevronDownIcon className="size-3.5" />
                       )}
                       <span>{group.label}</span>
-                      <span>({nodes.length})</span>
+                      <span className="text-[var(--ir-text-tertiary)]">
+                        ({nodes.length})
+                      </span>
                     </button>
                     {collapsed
                       ? null
@@ -706,7 +721,7 @@ export function IRPanel() {
 
       <button
         aria-label="Resize IR detail pane"
-        className="h-1 cursor-row-resize border-y border-border/40 bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="h-1 cursor-row-resize border-y border-[var(--ir-border-default)] bg-[var(--ir-bg-elevated)] focus-visible:outline-none"
         onKeyDown={(event) => {
           if (event.key === "ArrowUp") {
             setListPanePercent((current) => Math.max(28, current - 5));
@@ -726,23 +741,27 @@ export function IRPanel() {
       >
         {selectedNode ? (
           <>
-            <div className="flex items-start justify-between gap-2 border-b border-border/40 px-3 py-3">
+            <div className="flex items-start justify-between gap-2 border-b border-[var(--ir-border-default)] px-3 py-3">
               <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Detail</p>
-                <h3 className="truncate text-sm font-semibold">
-                  {selectedNode.id} · {selectedNode.title}
+                <p className="font-[var(--ir-font-mono)] text-xs text-[var(--ir-text-secondary)]">
+                  {getNodeTypeLabel(selectedNode)} {selectedNode.id}
+                </p>
+                <h3 className="mt-1 break-words text-base font-medium leading-[1.35] text-[var(--ir-text-primary)]">
+                  {selectedNode.title}
                 </h3>
-                <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--ir-text-tertiary)]">
+                  <span>
                     {getIRTypeLabel(selectedNode.kind, selectedNode.subtype)}
                   </span>
+                  <span>·</span>
                   <StatusBadge status={selectedNode.status} />
                 </div>
               </div>
               <Button
+                className="rounded border border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
                 onClick={() => selectNode(null)}
                 size="icon-sm"
-                variant="ghost"
+                variant="outline"
               >
                 <XIcon className="size-4" />
               </Button>
@@ -750,10 +769,10 @@ export function IRPanel() {
 
             <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
               <section className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <p className="text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--ir-text-tertiary)]">
                   Rationale
                 </p>
-                <p className="whitespace-pre-wrap text-sm text-foreground">
+                <p className="whitespace-pre-wrap text-sm leading-[1.55] text-[var(--ir-text-primary)]">
                   {selectedNode.rationale ||
                     selectedNode.content ||
                     selectedNode.title}
@@ -761,21 +780,23 @@ export function IRPanel() {
               </section>
 
               <section className="mt-4 space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <p className="text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--ir-text-tertiary)]">
                   Relations
                 </p>
                 {detail ? (
                   <DetailRelationList detail={detail} onSelect={selectNode} />
                 ) : (
-                  <p className="text-sm text-muted-foreground">Loading...</p>
+                  <p className="text-sm text-[var(--ir-text-tertiary)]">
+                    Loading...
+                  </p>
                 )}
               </section>
 
               <section className="mt-4 space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <p className="text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--ir-text-tertiary)]">
                   Source
                 </p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm leading-[1.55] text-[var(--ir-text-secondary)]">
                   {selectedNode.sourceLayer ?? "manual"} ·{" "}
                   {new Date(selectedNode.createdAt).toLocaleString()}
                 </p>
@@ -783,13 +804,13 @@ export function IRPanel() {
 
               {selectedNode.status === "pending" &&
               selectedNode.kind === "unclassified" ? (
-                <section className="mt-4 space-y-2 rounded-md border border-amber-300/60 bg-amber-50/60 p-2">
-                  <p className="text-xs font-semibold text-amber-800">
+                <section className="mt-4 space-y-2 border border-[var(--ir-warning-stripe)] bg-[var(--ir-warning-bg)] p-2">
+                  <p className="text-xs font-semibold text-[var(--ir-warning-fg)]">
                     Kind: not yet classified
                   </p>
                   <div className="flex gap-2">
                     <select
-                      className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs"
+                      className="h-8 min-w-0 flex-1 rounded border border-[var(--ir-border-default)] bg-[var(--ir-bg-elevated)] px-2 text-xs"
                       onChange={(event) => setKindChoice(event.target.value)}
                       value={kindChoice}
                     >
@@ -804,6 +825,7 @@ export function IRPanel() {
                       <option value="rejection:_">rejection</option>
                     </select>
                     <Button
+                      className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
                       disabled={isMutating}
                       onClick={() => handleReclassify(selectedNode)}
                       size="sm"
@@ -816,10 +838,11 @@ export function IRPanel() {
               ) : null}
             </div>
 
-            <div className="flex flex-wrap gap-2 border-t border-border/40 px-3 py-3">
+            <div className="flex flex-wrap gap-2 border-t border-[var(--ir-border-default)] px-3 py-3">
               {selectedNode.status === "active" ? (
                 <>
                   <Button
+                    className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
                     onClick={() => openEdit("supersede")}
                     size="sm"
                     variant="outline"
@@ -828,6 +851,7 @@ export function IRPanel() {
                     Supersede
                   </Button>
                   <Button
+                    className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
                     disabled={isMutating}
                     onClick={() => handleCreateNextStep(selectedNode)}
                     size="sm"
@@ -837,21 +861,23 @@ export function IRPanel() {
                     Create next step
                   </Button>
                   <Button
+                    className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
                     onClick={() =>
                       queueReferenceDraft(
                         `> [${selectedNode.id}] ${selectedNode.title}\n> ${selectedNode.content ?? selectedNode.title}`
                       )
                     }
                     size="sm"
-                    variant="ghost"
+                    variant="outline"
                   >
                     <MessageSquareTextIcon className="size-4" />
                     Ask AI
                   </Button>
                   <Button
+                    className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
                     onClick={() => handleBringToSandbox(selectedNode)}
                     size="sm"
-                    variant="ghost"
+                    variant="outline"
                   >
                     <ArrowDownToLineIcon className="size-4" />
                     Bring to sandbox
@@ -866,12 +892,13 @@ export function IRPanel() {
                       edge.fromNode === selectedNode.id &&
                       edge.relation === "supersedes"
                   ) ? (
-                    <div className="flex w-full items-start gap-2 rounded-md border border-amber-300/60 bg-amber-50 px-2 py-2 text-xs text-amber-800">
+                    <div className="flex w-full items-start gap-2 border border-[var(--ir-warning-stripe)] bg-[var(--ir-warning-bg)] px-2 py-2 text-xs text-[var(--ir-warning-fg)]">
                       <ShieldAlertIcon className="mt-0.5 size-3.5" />
                       Confirming this will mark an older truth as superseded.
                     </div>
                   ) : null}
                   <Button
+                    className="rounded border-[var(--ir-accent-blue-border)] bg-transparent text-[var(--ir-accent-blue)] hover:bg-[var(--ir-bg-hover)]"
                     disabled={isMutating}
                     onClick={() =>
                       runMutation(
@@ -883,11 +910,13 @@ export function IRPanel() {
                       )
                     }
                     size="sm"
+                    variant="outline"
                   >
                     <CheckIcon className="size-4" />
                     Confirm
                   </Button>
                   <Button
+                    className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
                     onClick={() => openEdit("confirm")}
                     size="sm"
                     variant="outline"
@@ -896,6 +925,7 @@ export function IRPanel() {
                     Edit & Confirm
                   </Button>
                   <Button
+                    className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
                     disabled={isMutating}
                     onClick={() =>
                       runMutation(
@@ -904,7 +934,7 @@ export function IRPanel() {
                       )
                     }
                     size="sm"
-                    variant="ghost"
+                    variant="outline"
                   >
                     Ignore
                   </Button>
@@ -914,6 +944,7 @@ export function IRPanel() {
               {selectedNode.status === "idea" ? (
                 <>
                   <Button
+                    className="rounded border-[var(--ir-accent-blue-border)] bg-transparent text-[var(--ir-accent-blue)] hover:bg-[var(--ir-bg-hover)]"
                     disabled={isMutating}
                     onClick={() =>
                       runMutation(
@@ -922,11 +953,13 @@ export function IRPanel() {
                       )
                     }
                     size="sm"
+                    variant="outline"
                   >
                     <CircleDotIcon className="size-4" />
                     Promote
                   </Button>
                   <Button
+                    className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
                     disabled={isMutating}
                     onClick={() =>
                       runMutation(
@@ -940,9 +973,10 @@ export function IRPanel() {
                     Dismiss
                   </Button>
                   <Button
+                    className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
                     onClick={() => handleBringToSandbox(selectedNode)}
                     size="sm"
-                    variant="ghost"
+                    variant="outline"
                   >
                     Bring to sandbox
                   </Button>
@@ -955,9 +989,10 @@ export function IRPanel() {
                     Restore
                   </Button>
                   <Button
+                    className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
                     onClick={() => handleBringToSandbox(selectedNode)}
                     size="sm"
-                    variant="ghost"
+                    variant="outline"
                   >
                     Bring to sandbox
                   </Button>
@@ -966,8 +1001,8 @@ export function IRPanel() {
             </div>
           </>
         ) : (
-          <div className="flex h-full flex-col justify-center px-4 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">Detail</p>
+          <div className="flex h-full flex-col justify-center px-4 text-sm text-[var(--ir-text-tertiary)]">
+            <p className="font-medium text-[var(--ir-text-primary)]">Detail</p>
             <p>Select an idea, candidate, truth node, or inline reference.</p>
           </div>
         )}
@@ -977,7 +1012,7 @@ export function IRPanel() {
         onOpenChange={(open) => !open && setEditMode(null)}
         open={Boolean(editMode)}
       >
-        <DialogContent>
+        <DialogContent className="rounded-lg border border-[var(--ir-border-default)] bg-[var(--ir-bg-panel)]">
           <DialogHeader>
             <DialogTitle>
               {editMode === "supersede"
@@ -987,25 +1022,31 @@ export function IRPanel() {
           </DialogHeader>
           <div className="space-y-3">
             <Input
+              className="rounded border-[var(--ir-border-default)] bg-[var(--ir-bg-elevated)] focus-visible:ring-0"
               onChange={(event) => setDraftTitle(event.target.value)}
               placeholder="Title"
               value={draftTitle}
             />
             <Textarea
-              className="min-h-28"
+              className="min-h-28 rounded border-[var(--ir-border-default)] bg-[var(--ir-bg-elevated)] focus-visible:ring-0"
               onChange={(event) => setDraftContent(event.target.value)}
               placeholder="Content"
               value={draftContent}
             />
             <Textarea
-              className="min-h-20"
+              className="min-h-20 rounded border-[var(--ir-border-default)] bg-[var(--ir-bg-elevated)] focus-visible:ring-0"
               onChange={(event) => setDraftRationale(event.target.value)}
               placeholder="Rationale"
               value={draftRationale}
             />
           </div>
           <DialogFooter>
-            <Button disabled={isMutating} onClick={submitEditDialog}>
+            <Button
+              className="rounded border-[var(--ir-accent-blue-border)] bg-transparent text-[var(--ir-accent-blue)] hover:bg-[var(--ir-bg-hover)]"
+              disabled={isMutating}
+              onClick={submitEditDialog}
+              variant="outline"
+            >
               {editMode === "supersede" ? "Draft candidate" : "Confirm"}
             </Button>
           </DialogFooter>

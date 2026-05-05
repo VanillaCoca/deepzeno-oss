@@ -88,7 +88,7 @@ export function IRMessageResponse({ children }: { children: string }) {
           <InlineRef id={part.id} key={part.key} />
         ) : part.type === "marker" ? (
           <span
-            className="inline-flex rounded border border-dashed border-blue-300 bg-blue-100 px-1.5 py-0.5 align-baseline font-medium text-blue-900 text-xs"
+            className="inline-flex rounded border border-dashed border-[var(--ir-accent-blue-border)] bg-[var(--ir-accent-blue-bg)] px-1.5 py-0.5 align-baseline font-medium text-[var(--ir-accent-blue)] text-xs"
             key={part.key}
             title="Candidate marker is being saved to ZENO"
           >
