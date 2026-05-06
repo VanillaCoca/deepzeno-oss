@@ -8,10 +8,16 @@ export const decisionKindOrder = [
   "rejection",
 ] as const;
 
-export type DecisionKind = (typeof decisionKindOrder)[number];
+export const UNCLASSIFIED_KIND = "unclassified" as const;
+
+export type ClassifiedDecisionKind = (typeof decisionKindOrder)[number];
+export type DecisionKind = ClassifiedDecisionKind | typeof UNCLASSIFIED_KIND;
 
 export function isDecisionKind(value: string): value is DecisionKind {
-  return (decisionKindOrder as readonly string[]).includes(value);
+  return (
+    value === UNCLASSIFIED_KIND ||
+    (decisionKindOrder as readonly string[]).includes(value)
+  );
 }
 
 export function getDecisionKindLabel(kind: string) {

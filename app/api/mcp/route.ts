@@ -1,20 +1,27 @@
 /**
  * ZENO MCP route
  *
- * V1 boundary: external agents may only READ confirmed truth and WRITE
- * candidate_decisions through submit_candidate. They must never mutate
- * decisions, edges, or decision_log directly from MCP.
+ * V1 boundary: external agents may directly mutate routine truth, while
+ * high-blast-radius writes are routed into candidate review.
  */
 
 import { z } from "zod";
+import { decisionKindOrder } from "@/lib/decision-kinds";
 import { ChatbotError } from "@/lib/errors";
 import { authenticateProjectApiKey } from "@/lib/mcp/api-keys";
 import {
+  archiveMcpDecision,
+  createMcpDecision,
+  createMcpEdge,
+  deleteMcpEdge,
   getMcpDecision,
   getMcpProjectContext,
   listMcpDecisions,
   listMcpTopics,
+  resolveMcpOpenQuestion,
   submitMcpCandidate,
+  supersedeMcpDecision,
+  updateMcpDecision,
 } from "@/lib/mcp/service";
 
 type JsonRpcId = string | number | null;
@@ -57,6 +64,111 @@ const submitCandidateSchema = z.object({
   proposed_rationale: z.string().optional(),
   external_evidence: z.string().optional(),
   source_metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+const decisionKindSchema = z.enum(decisionKindOrder);
+const decisionWeightSchema = z.enum(["low", "normal", "high"]);
+
+const codeAnchorSchema = z
+  .object({
+    repo: z.string().trim().min(1).optional(),
+    file: z.string().trim().min(1),
+    line_start: z.number().int().positive().optional(),
+    line_end: z.number().int().positive().optional(),
+    commit_sha: z.string().trim().min(1).optional(),
+    captured_at: z
+      .string()
+      .min(1)
+      .refine((value) => !Number.isNaN(Date.parse(value)), {
+        message: "captured_at must be ISO-parseable",
+      }),
+  })
+  .superRefine((anchor, context) => {
+    if (
+      anchor.line_start !== undefined &&
+      anchor.line_end !== undefined &&
+      anchor.line_start > anchor.line_end
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["line_end"],
+        message: "line_end must be greater than or equal to line_start",
+      });
+    }
+  });
+
+const agentWriteSchema = z.object({
+  agent: z.string().trim().min(1),
+  session_id: z.string().trim().min(1).optional(),
+});
+
+const createDecisionSchema = agentWriteSchema.extend({
+  project_id: z.string().uuid(),
+  topic_id: z.string().uuid(),
+  title: z.string().min(1),
+  content: z.string().min(1),
+  kind: decisionKindSchema,
+  rationale: z.string().optional(),
+  weight: decisionWeightSchema.optional().default("normal"),
+  relevant_message_ids: z.array(z.string().uuid()).optional(),
+  code_anchors: z.array(codeAnchorSchema).optional(),
+});
+
+const updateDecisionSchema = agentWriteSchema.extend({
+  decision_id: z.string().uuid(),
+  title: z.string().min(1).optional(),
+  content: z.string().min(1).optional(),
+  rationale: z.string().optional(),
+  kind: decisionKindSchema.optional(),
+  weight: decisionWeightSchema.optional(),
+  code_anchors: z.array(codeAnchorSchema).optional(),
+});
+
+const archiveDecisionSchema = agentWriteSchema.extend({
+  decision_id: z.string().uuid(),
+  reason: z.string().optional(),
+});
+
+const supersedeDecisionSchema = agentWriteSchema.extend({
+  superseded_decision_id: z.string().uuid(),
+  new_title: z.string().min(1),
+  new_content: z.string().min(1),
+  new_rationale: z.string().optional(),
+  new_kind: decisionKindSchema.optional(),
+  new_weight: decisionWeightSchema.optional(),
+  new_code_anchors: z.array(codeAnchorSchema).optional(),
+  reason: z.string().min(1),
+});
+
+const resolveOpenQuestionSchema = agentWriteSchema.extend({
+  question_decision_id: z.string().uuid(),
+  resolution: z.enum(["answered", "no_longer_relevant", "split"]),
+  answer_kind: decisionKindSchema.optional(),
+  answer_title: z.string().min(1).optional(),
+  answer_content: z.string().min(1).optional(),
+  answer_rationale: z.string().optional(),
+  answer_code_anchors: z.array(codeAnchorSchema).optional(),
+});
+
+const createEdgeSchema = agentWriteSchema.extend({
+  project_id: z.string().uuid(),
+  source_decision_id: z.string().uuid(),
+  target_decision_id: z.string().uuid(),
+  type: z.enum([
+    "supports",
+    "contradicts",
+    "blocks",
+    "blocked_by",
+    "depends_on",
+    "supersedes",
+    "resolves",
+    "related_to",
+  ]),
+});
+
+const deleteEdgeSchema = agentWriteSchema.extend({
+  edge_id: z.string().uuid(),
+  reason: z.string().optional(),
 });
 
 function jsonRpcResult(id: JsonRpcId, result: unknown, init?: ResponseInit) {
@@ -119,6 +231,30 @@ function parseBearerToken(request: Request) {
 
   return request.headers.get("x-api-key")?.trim() ?? null;
 }
+
+const decisionKindJsonSchema = {
+  type: "string",
+  enum: [...decisionKindOrder],
+};
+
+const decisionWeightJsonSchema = {
+  type: "string",
+  enum: ["low", "normal", "high"],
+};
+
+const codeAnchorJsonSchema = {
+  type: "object",
+  properties: {
+    repo: { type: "string" },
+    file: { type: "string" },
+    line_start: { type: "integer", minimum: 1 },
+    line_end: { type: "integer", minimum: 1 },
+    commit_sha: { type: "string" },
+    captured_at: { type: "string", format: "date-time" },
+  },
+  required: ["file", "captured_at"],
+  additionalProperties: false,
+};
 
 function getToolDefinitions() {
   return [
@@ -204,8 +340,7 @@ function getToolDefinitions() {
     },
     {
       name: "submit_candidate",
-      description:
-        "Submit a candidate decision for human review. This is the only MCP write path in V1.",
+      description: "Submit a candidate decision for human review.",
       inputSchema: {
         type: "object",
         properties: {
@@ -228,6 +363,191 @@ function getToolDefinitions() {
           "proposed_content",
           "proposed_kind",
         ],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "create_decision",
+      description:
+        "Create a truth decision directly unless the kind requires human approval.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          project_id: { type: "string", format: "uuid" },
+          topic_id: { type: "string", format: "uuid" },
+          title: { type: "string" },
+          content: { type: "string" },
+          kind: decisionKindJsonSchema,
+          rationale: { type: "string" },
+          weight: decisionWeightJsonSchema,
+          relevant_message_ids: {
+            type: "array",
+            items: { type: "string", format: "uuid" },
+          },
+          code_anchors: {
+            type: "array",
+            items: codeAnchorJsonSchema,
+          },
+          agent: { type: "string" },
+          session_id: { type: "string" },
+        },
+        required: [
+          "project_id",
+          "topic_id",
+          "title",
+          "content",
+          "kind",
+          "agent",
+        ],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "update_decision",
+      description:
+        "Update title, content, rationale, kind, weight, or code anchors for an existing decision.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          decision_id: { type: "string", format: "uuid" },
+          title: { type: "string" },
+          content: { type: "string" },
+          rationale: { type: "string" },
+          kind: decisionKindJsonSchema,
+          weight: decisionWeightJsonSchema,
+          code_anchors: {
+            type: "array",
+            items: codeAnchorJsonSchema,
+          },
+          agent: { type: "string" },
+          session_id: { type: "string" },
+        },
+        required: ["decision_id", "agent"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "archive_decision",
+      description:
+        "Archive a decision directly unless it is user-confirmed high-weight truth.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          decision_id: { type: "string", format: "uuid" },
+          reason: { type: "string" },
+          agent: { type: "string" },
+          session_id: { type: "string" },
+        },
+        required: ["decision_id", "agent"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "supersede_decision",
+      description:
+        "Create a replacement decision, mark the old decision superseded, and connect them.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          superseded_decision_id: { type: "string", format: "uuid" },
+          new_title: { type: "string" },
+          new_content: { type: "string" },
+          new_rationale: { type: "string" },
+          new_kind: decisionKindJsonSchema,
+          new_weight: decisionWeightJsonSchema,
+          new_code_anchors: {
+            type: "array",
+            items: codeAnchorJsonSchema,
+          },
+          reason: { type: "string" },
+          agent: { type: "string" },
+          session_id: { type: "string" },
+        },
+        required: [
+          "superseded_decision_id",
+          "new_title",
+          "new_content",
+          "reason",
+          "agent",
+        ],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "resolve_open_question",
+      description:
+        "Resolve an active open question by archiving it, optionally creating an answer decision.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          question_decision_id: { type: "string", format: "uuid" },
+          resolution: {
+            type: "string",
+            enum: ["answered", "no_longer_relevant", "split"],
+          },
+          answer_kind: decisionKindJsonSchema,
+          answer_title: { type: "string" },
+          answer_content: { type: "string" },
+          answer_rationale: { type: "string" },
+          answer_code_anchors: {
+            type: "array",
+            items: codeAnchorJsonSchema,
+          },
+          agent: { type: "string" },
+          session_id: { type: "string" },
+        },
+        required: ["question_decision_id", "resolution", "agent"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "create_edge",
+      description:
+        "Create a relationship edge between two decisions in the same project and topic.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          project_id: { type: "string", format: "uuid" },
+          source_decision_id: { type: "string", format: "uuid" },
+          target_decision_id: { type: "string", format: "uuid" },
+          type: {
+            type: "string",
+            enum: [
+              "supports",
+              "contradicts",
+              "blocks",
+              "blocked_by",
+              "depends_on",
+              "supersedes",
+              "resolves",
+              "related_to",
+            ],
+          },
+          agent: { type: "string" },
+          session_id: { type: "string" },
+        },
+        required: [
+          "project_id",
+          "source_decision_id",
+          "target_decision_id",
+          "type",
+          "agent",
+        ],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "delete_edge",
+      description: "Delete a decision relationship edge.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          edge_id: { type: "string", format: "uuid" },
+          reason: { type: "string" },
+          agent: { type: "string" },
+          session_id: { type: "string" },
+        },
+        required: ["edge_id", "agent"],
         additionalProperties: false,
       },
     },
@@ -329,6 +649,115 @@ async function handleToolCall(
         })
       );
     }
+    case "create_decision": {
+      const input = createDecisionSchema.parse(args ?? {});
+      return toolResult(
+        await createMcpDecision({
+          apiKey,
+          projectId: input.project_id,
+          topicId: input.topic_id,
+          title: input.title,
+          content: input.content,
+          kind: input.kind,
+          rationale: input.rationale,
+          weight: input.weight,
+          relevantMessageIds: input.relevant_message_ids,
+          codeAnchors: input.code_anchors,
+          agent: input.agent,
+          sessionId: input.session_id,
+        })
+      );
+    }
+    case "update_decision": {
+      const input = updateDecisionSchema.parse(args ?? {});
+      return toolResult(
+        await updateMcpDecision({
+          apiKey,
+          decisionId: input.decision_id,
+          title: input.title,
+          content: input.content,
+          rationale: input.rationale,
+          kind: input.kind,
+          weight: input.weight,
+          codeAnchors: input.code_anchors,
+          agent: input.agent,
+          sessionId: input.session_id,
+        })
+      );
+    }
+    case "archive_decision": {
+      const input = archiveDecisionSchema.parse(args ?? {});
+      return toolResult(
+        await archiveMcpDecision({
+          apiKey,
+          decisionId: input.decision_id,
+          reason: input.reason,
+          agent: input.agent,
+          sessionId: input.session_id,
+        })
+      );
+    }
+    case "supersede_decision": {
+      const input = supersedeDecisionSchema.parse(args ?? {});
+      return toolResult(
+        await supersedeMcpDecision({
+          apiKey,
+          supersededDecisionId: input.superseded_decision_id,
+          newTitle: input.new_title,
+          newContent: input.new_content,
+          newRationale: input.new_rationale,
+          newKind: input.new_kind,
+          newWeight: input.new_weight,
+          newCodeAnchors: input.new_code_anchors,
+          reason: input.reason,
+          agent: input.agent,
+          sessionId: input.session_id,
+        })
+      );
+    }
+    case "resolve_open_question": {
+      const input = resolveOpenQuestionSchema.parse(args ?? {});
+      return toolResult(
+        await resolveMcpOpenQuestion({
+          apiKey,
+          questionDecisionId: input.question_decision_id,
+          resolution: input.resolution,
+          answerKind: input.answer_kind,
+          answerTitle: input.answer_title,
+          answerContent: input.answer_content,
+          answerRationale: input.answer_rationale,
+          answerCodeAnchors: input.answer_code_anchors,
+          agent: input.agent,
+          sessionId: input.session_id,
+        })
+      );
+    }
+    case "create_edge": {
+      const input = createEdgeSchema.parse(args ?? {});
+      return toolResult(
+        await createMcpEdge({
+          apiKey,
+          projectId: input.project_id,
+          sourceDecisionId: input.source_decision_id,
+          targetDecisionId: input.target_decision_id,
+          type: input.type,
+          agent: input.agent,
+          sessionId: input.session_id,
+        })
+      );
+    }
+    case "delete_edge": {
+      const input = deleteEdgeSchema.parse(args ?? {});
+      return toolResult(
+        await deleteMcpEdge({
+          apiKey,
+          edgeId: input.edge_id,
+          reason: input.reason,
+          agent: input.agent,
+          sessionId: input.session_id,
+        })
+      );
+    }
     default:
       return null;
   }
@@ -391,7 +820,7 @@ async function handleRequest(payload: JsonRpcRequest, request: Request) {
         version: "1.0.0",
       },
       instructions:
-        "Read confirmed truth via the read-only tools. Submit new findings through submit_candidate only.",
+        "Read confirmed truth with the read tools. Routine truth writes may use the write tools directly; high-risk writes return requires_approval and must be approved in Zeno.",
     });
   }
 

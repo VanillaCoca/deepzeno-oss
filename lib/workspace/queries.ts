@@ -1,5 +1,8 @@
 import "server-only";
 
+import type { CodeAnchor } from "@/lib/decision-anchors";
+import { normalizeCodeAnchors } from "@/lib/decision-anchors";
+import type { DecisionLogActorType } from "@/lib/decision-log-actors";
 import { ChatbotError } from "@/lib/errors";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import type {
@@ -41,6 +44,9 @@ type InsertCandidateDecision = {
   proposedRationale?: string | null;
   proposedKind?: string | null;
   proposedWeight?: string | null;
+  proposedForDecisionId?: string | null;
+  proposedStatus?: string | null;
+  proposedIntent?: string | null;
   confidence?: number | null;
   preSelected?: boolean;
   suggestedEdges?: WorkspaceCandidateDecision["suggestedEdges"];
@@ -62,8 +68,20 @@ type InsertDecision = {
   status?: string | null;
   sensitivity?: string | null;
   relevantMessageIds?: string[] | null;
+  codeAnchors?: CodeAnchor[] | null;
   createdFromMessageId?: string | null;
   confirmedByUserId?: string | null;
+};
+
+type UpdateDecision = {
+  decisionId: string;
+  title?: string;
+  content?: string;
+  rationale?: string | null;
+  kind?: string;
+  weight?: string;
+  status?: string;
+  codeAnchors?: CodeAnchor[] | null;
 };
 
 type InsertEdge = {
@@ -78,7 +96,7 @@ type InsertDecisionLog = {
   decisionId?: string | null;
   candidateId?: string | null;
   action: string;
-  actorType?: string;
+  actorType?: DecisionLogActorType;
   metadata?: Record<string, unknown> | null;
 };
 
@@ -289,6 +307,7 @@ function mapTopic(row: DatabaseRecord): WorkspaceTopic {
     projectId: String(row.project_id),
     label: String(row.label),
     isGeneral: toBoolean(row.is_general),
+    defaultModelId: toNullableString(row.default_model_id),
     archivedAt: toNullableString(row.archived_at),
     position: toNumber(row.position),
     createdAt: toIsoString(row.created_at),
@@ -318,7 +337,7 @@ function mapMessage(row: DatabaseRecord): WorkspaceMessageRecord {
   };
 }
 
-function mapDecision(row: DatabaseRecord): WorkspaceDecision {
+export function mapDecision(row: DatabaseRecord): WorkspaceDecision {
   return {
     id: String(row.id),
     projectId: String(row.project_id),
@@ -331,6 +350,7 @@ function mapDecision(row: DatabaseRecord): WorkspaceDecision {
     status: String(row.status ?? "active"),
     sensitivity: String(row.sensitivity ?? "normal"),
     relevantMessageIds: toStringArray(row.relevant_message_ids),
+    codeAnchors: normalizeCodeAnchors(row.code_anchors),
     createdFromMessageId: toNullableString(row.created_from_message_id),
     confirmedByUserId: toNullableString(row.confirmed_by_user_id),
     createdAt: toIsoString(row.created_at),
@@ -350,7 +370,7 @@ function mapEdge(row: DatabaseRecord): WorkspaceEdge {
   };
 }
 
-function mapCandidate(row: DatabaseRecord): WorkspaceCandidateDecision {
+export function mapCandidate(row: DatabaseRecord): WorkspaceCandidateDecision {
   const confidenceValue =
     typeof row.confidence === "number"
       ? row.confidence
@@ -369,6 +389,9 @@ function mapCandidate(row: DatabaseRecord): WorkspaceCandidateDecision {
     proposedRationale: toNullableString(row.proposed_rationale),
     proposedKind: toNullableString(row.proposed_kind),
     proposedWeight: toNullableString(row.proposed_weight),
+    proposedForDecisionId: toNullableString(row.proposed_for_decision_id),
+    proposedStatus: toNullableString(row.proposed_status),
+    proposedIntent: toNullableString(row.proposed_intent),
     confidence: Number.isNaN(confidenceValue) ? null : confidenceValue,
     preSelected: toBoolean(row.pre_selected),
     status: String(row.status ?? "pending"),
@@ -565,6 +588,34 @@ export async function getTopicByIdForUser(topicId: string, userId: string) {
   );
 
   return row ? mapTopic(row as DatabaseRecord) : null;
+}
+
+export async function updateTopicDefaultModelForUser({
+  userId,
+  topicId,
+  modelId,
+}: {
+  userId: string;
+  topicId: string;
+  modelId: string;
+}) {
+  const topic = await getTopicByIdForUser(topicId, userId);
+
+  if (!topic) {
+    throw new ChatbotError("forbidden:chat", "Topic not found");
+  }
+
+  const row = await ensureResult(
+    getClient()
+      .from("topics")
+      .update({ default_model_id: modelId })
+      .eq("id", topicId)
+      .select("*")
+      .single(),
+    "Failed to update topic default model"
+  );
+
+  return mapTopic(row as DatabaseRecord);
 }
 
 export async function createTopicForProject({
@@ -922,6 +973,9 @@ export async function insertCandidateDecisions(
     proposed_rationale: candidate.proposedRationale ?? null,
     proposed_kind: candidate.proposedKind ?? "plan",
     proposed_weight: candidate.proposedWeight ?? "normal",
+    proposed_for_decision_id: candidate.proposedForDecisionId ?? null,
+    proposed_status: candidate.proposedStatus ?? null,
+    proposed_intent: candidate.proposedIntent ?? "create",
     confidence: candidate.confidence ?? null,
     pre_selected: candidate.preSelected ?? true,
     status: "pending",
@@ -961,6 +1015,9 @@ export async function insertCandidateDecisions(
         source: _source,
         source_metadata: _sourceMetadata,
         external_evidence: _externalEvidence,
+        proposed_for_decision_id: _proposedForDecisionId,
+        proposed_status: _proposedStatus,
+        proposed_intent: _proposedIntent,
         ...legacyRow
       }) => legacyRow
     );
@@ -1046,6 +1103,7 @@ export async function insertDecision(decisionInput: InsertDecision) {
         status: decisionInput.status ?? "active",
         sensitivity: decisionInput.sensitivity ?? "normal",
         relevant_message_ids: decisionInput.relevantMessageIds ?? null,
+        code_anchors: decisionInput.codeAnchors ?? null,
         created_from_message_id: decisionInput.createdFromMessageId ?? null,
         confirmed_by_user_id: decisionInput.confirmedByUserId ?? null,
       })
@@ -1061,6 +1119,61 @@ export async function insertDecision(decisionInput: InsertDecision) {
         title: decisionInput.title,
         kind: decisionInput.kind ?? "plan",
         status: decisionInput.status ?? "active",
+      },
+    }
+  );
+
+  return mapDecision(row as DatabaseRecord);
+}
+
+export async function updateDecision(decisionInput: UpdateDecision) {
+  const patch: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (decisionInput.title !== undefined) {
+    patch.title = decisionInput.title;
+  }
+
+  if (decisionInput.content !== undefined) {
+    patch.content = decisionInput.content;
+  }
+
+  if (decisionInput.rationale !== undefined) {
+    patch.rationale = decisionInput.rationale;
+  }
+
+  if (decisionInput.kind !== undefined) {
+    patch.kind = decisionInput.kind;
+  }
+
+  if (decisionInput.weight !== undefined) {
+    patch.weight = decisionInput.weight;
+  }
+
+  if (decisionInput.status !== undefined) {
+    patch.status = decisionInput.status;
+  }
+
+  if (decisionInput.codeAnchors !== undefined) {
+    patch.code_anchors = decisionInput.codeAnchors;
+  }
+
+  const client = getClient();
+  const row = await ensureResult(
+    client
+      .from("decisions")
+      .update(patch)
+      .eq("id", decisionInput.decisionId)
+      .select("*")
+      .single(),
+    "Failed to update decision",
+    {
+      operation: "update_decision",
+      table: "decisions",
+      payload: {
+        decisionId: decisionInput.decisionId,
+        fields: Object.keys(patch).filter((key) => key !== "updated_at"),
       },
     }
   );
@@ -1141,14 +1254,20 @@ export async function updateCandidateResolution({
 
 export async function insertDecisionLog(entry: InsertDecisionLog) {
   const client = getClient();
-  await ensureResult(
-    client.from("decision_log").insert({
-      decision_id: entry.decisionId ?? null,
-      candidate_id: entry.candidateId ?? null,
-      action: entry.action,
-      actor_type: entry.actorType ?? "user",
-      metadata: entry.metadata ?? null,
-    }),
+  const row = await ensureResult(
+    client
+      .from("decision_log")
+      .insert({
+        decision_id: entry.decisionId ?? null,
+        candidate_id: entry.candidateId ?? null,
+        action: entry.action,
+        actor_type: entry.actorType ?? "user",
+        metadata: entry.metadata ?? null,
+      })
+      .select("id")
+      .single(),
     "Failed to insert decision log"
   );
+
+  return String((row as DatabaseRecord).id);
 }

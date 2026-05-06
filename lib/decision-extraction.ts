@@ -5,7 +5,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { getLanguageModel } from "@/lib/ai/providers";
 import {
-  type DecisionKind,
+  type ClassifiedDecisionKind,
   decisionKindOrder,
   isDecisionKind,
 } from "@/lib/decision-kinds";
@@ -63,7 +63,7 @@ function summarizeTitle(content: string) {
   return normalized.length > 80 ? `${normalized.slice(0, 77)}...` : normalized;
 }
 
-function inferKind(content: string): DecisionKind {
+function inferKind(content: string): ClassifiedDecisionKind {
   const text = content.toLowerCase();
 
   if (

@@ -37,6 +37,7 @@ async function mockProjectExtraction(page: Page) {
 }
 
 test.describe("Homepage and create-project flow", () => {
+  // biome-ignore lint/suspicious/noSkippedTests: conditional e2e requires Supabase auth.
   test.skip(
     !hasSupabaseE2EConfig,
     "Supabase auth must be configured for homepage e2e."

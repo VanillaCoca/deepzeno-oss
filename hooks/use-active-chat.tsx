@@ -8,6 +8,7 @@ import {
   type Dispatch,
   type ReactNode,
   type SetStateAction,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -22,10 +23,10 @@ import { toast } from "@/components/chat/toast";
 import type { VisibilityType } from "@/components/chat/visibility-selector";
 import { useWorkspace } from "@/components/workspace/workspace-provider";
 import { useAutoResume } from "@/hooks/use-auto-resume";
-import { getTopicTruthSnapshotKey } from "@/hooks/use-topic-truth";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import type { Vote } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
+import { isIRListKeyForScope } from "@/lib/ir/client-keys";
 import type { ChatMessage } from "@/lib/types";
 import { fetcher, fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
 
@@ -74,7 +75,14 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       !isWorkspaceLoading
   );
 
-  const [currentModelId, setCurrentModelId] = useState(DEFAULT_CHAT_MODEL);
+  const [currentModelId, setCurrentModelIdState] = useState(DEFAULT_CHAT_MODEL);
+  const [userDefaultModelId, setUserDefaultModelId] = useState<string | null>(
+    null
+  );
+  const setCurrentModelId = useCallback((id: string) => {
+    setCurrentModelIdState(id);
+    setUserDefaultModelId(id);
+  }, []);
   const currentModelIdRef = useRef(currentModelId);
   useEffect(() => {
     currentModelIdRef.current = currentModelId;
@@ -87,7 +95,9 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       ?.split("=")[1];
 
     if (cookieModel) {
-      setCurrentModelId(decodeURIComponent(cookieModel));
+      const decodedModel = decodeURIComponent(cookieModel);
+      setUserDefaultModelId(decodedModel);
+      setCurrentModelIdState(decodedModel);
     }
   }, []);
 
@@ -101,10 +111,8 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     activeTopicIsGeneralRef.current = Boolean(activeTopic?.isGeneral);
   }, [activeTopic?.isGeneral, activeTopicId]);
 
-  function scheduleTopicTruthRefresh(topicId: string | null) {
-    const key = getTopicTruthSnapshotKey(topicId);
-
-    if (!key) {
+  function scheduleIRRefresh(projectId: string | null, topicId: string | null) {
+    if (!projectId || !topicId) {
       return;
     }
 
@@ -112,7 +120,13 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
 
     for (const delay of delays) {
       window.setTimeout(() => {
-        mutate(key).catch(console.error);
+        mutate((key) =>
+          isIRListKeyForScope({
+            key,
+            projectId,
+            topicId,
+          })
+        ).catch(console.error);
       }, delay);
     }
   }
@@ -123,12 +137,18 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     { revalidateOnFocus: false, dedupingInterval: 3_600_000 }
   );
 
+  const preferredModelSeed =
+    activeTopic?.defaultModelId ??
+    userDefaultModelId ??
+    modelsData?.defaultModelId ??
+    DEFAULT_CHAT_MODEL;
+
   useEffect(() => {
     const availableModelIds = new Set<string>(
       (modelsData?.models ?? []).map((model: { id: string }) => model.id)
     );
     const defaultModelId = modelsData?.defaultModelId as string | undefined;
-    const candidates = [currentModelId, defaultModelId, DEFAULT_CHAT_MODEL];
+    const candidates = [preferredModelSeed, defaultModelId, DEFAULT_CHAT_MODEL];
     let preferredModelId: string | null = null;
 
     for (const candidate of candidates) {
@@ -146,9 +166,14 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       preferredModelId !== currentModelId &&
       (availableModelIds.size === 0 || availableModelIds.has(preferredModelId))
     ) {
-      setCurrentModelId(preferredModelId);
+      setCurrentModelIdState(preferredModelId);
     }
-  }, [currentModelId, modelsData?.defaultModelId, modelsData?.models]);
+  }, [
+    currentModelId,
+    modelsData?.defaultModelId,
+    modelsData?.models,
+    preferredModelSeed,
+  ]);
 
   const { data: chatData, isLoading } = useSWR(
     isWorkspaceReady
@@ -228,7 +253,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
 
       if (!activeTopicIsGeneralRef.current) {
-        scheduleTopicTruthRefresh(activeTopicIdRef.current);
+        scheduleIRRefresh(activeProjectId, activeTopicIdRef.current);
       }
     },
     onError: (error) => {
@@ -347,6 +372,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       isLoading,
       votes,
       currentModelId,
+      setCurrentModelId,
       showCreditCardAlert,
     ]
   );

@@ -1,3 +1,5 @@
+import type { CodeAnchor } from "@/lib/decision-anchors";
+
 export type PendingCandidateCounts = Record<string, number>;
 
 export type WorkspaceProject = {
@@ -18,6 +20,7 @@ export type WorkspaceTopic = {
   projectId: string;
   label: string;
   isGeneral: boolean;
+  defaultModelId: string | null;
   archivedAt: string | null;
   position: number;
   createdAt: string;
@@ -54,6 +57,7 @@ export type WorkspaceDecision = {
   status: string;
   sensitivity: string;
   relevantMessageIds: string[] | null;
+  codeAnchors: CodeAnchor[] | null;
   createdFromMessageId: string | null;
   confirmedByUserId: string | null;
   createdAt: string;
@@ -81,6 +85,9 @@ export type WorkspaceCandidateDecision = {
   proposedRationale: string | null;
   proposedKind: string | null;
   proposedWeight: string | null;
+  proposedForDecisionId: string | null;
+  proposedStatus: string | null;
+  proposedIntent: string | null;
   confidence: number | null;
   preSelected: boolean;
   status: string;

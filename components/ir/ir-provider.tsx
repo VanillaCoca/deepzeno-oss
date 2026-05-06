@@ -12,6 +12,7 @@ import {
 } from "react";
 import useSWR, { type KeyedMutator } from "swr";
 import { useWorkspace } from "@/components/workspace/workspace-provider";
+import { getIRListKey } from "@/lib/ir/client-keys";
 import type { IREdge, IRNode } from "@/lib/ir/types";
 import {
   createClient as createSupabaseClient,
@@ -41,31 +42,6 @@ type IRContextValue = {
 const EMPTY_PAYLOAD: IRListPayload = { nodes: [], edges: [] };
 const IRContext = createContext<IRContextValue | null>(null);
 
-function irListKey({
-  projectId,
-  topicId,
-  status,
-}: {
-  projectId: string | null;
-  topicId?: string | null;
-  status: string;
-}) {
-  if (!projectId) {
-    return null;
-  }
-
-  const params = new URLSearchParams({
-    project_id: projectId,
-    status,
-  });
-
-  if (topicId) {
-    params.set("topic_id", topicId);
-  }
-
-  return `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/ir?${params.toString()}`;
-}
-
 export function irNodeKey(nodeId: string | null) {
   if (!nodeId) {
     return null;
@@ -75,27 +51,22 @@ export function irNodeKey(nodeId: string | null) {
 }
 
 export function IRProvider({ children }: { children: ReactNode }) {
-  const { activeProjectId, activeTopic, activeTopicId, setPendingCount } =
-    useWorkspace();
+  const { activeProjectId, activeTopicId, setPendingCount } = useWorkspace();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const isGeneralTopic = Boolean(activeTopic?.isGeneral);
-  const scopedTopicId = isGeneralTopic ? null : activeTopicId;
-  const ideaKey = scopedTopicId
-    ? irListKey({
-        projectId: activeProjectId,
-        topicId: scopedTopicId,
-        status: "idea",
-      })
-    : null;
-  const candidateKey = scopedTopicId
-    ? irListKey({
-        projectId: activeProjectId,
-        topicId: scopedTopicId,
-        status: "pending",
-      })
-    : null;
-  const truthKey = irListKey({
+  const scopedTopicId = activeTopicId;
+  const ideaKey = getIRListKey({
     projectId: activeProjectId,
+    topicId: scopedTopicId,
+    status: "idea",
+  });
+  const candidateKey = getIRListKey({
+    projectId: activeProjectId,
+    topicId: scopedTopicId,
+    status: "pending",
+  });
+  const truthKey = getIRListKey({
+    projectId: activeProjectId,
+    topicId: scopedTopicId,
     status: "active",
   });
   const {

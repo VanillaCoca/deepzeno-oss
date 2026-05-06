@@ -4,8 +4,6 @@ import type { UseChatHelpers } from "@ai-sdk/react";
 import type { UIMessage } from "ai";
 import equal from "fast-deep-equal";
 import { ArrowUpIcon, BrainIcon, EyeIcon, WrenchIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
 import {
   type ChangeEvent,
   type Dispatch,
@@ -17,7 +15,7 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { useLocalStorage, useWindowSize } from "usehooks-ts";
 import {
   ModelSelector,
@@ -62,6 +60,31 @@ function setCookie(name: string, value: string) {
   document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}`;
 }
 
+function getSlashInvocation(value: string) {
+  const slashIndex = value.lastIndexOf("/");
+
+  if (slashIndex === -1) {
+    return null;
+  }
+
+  const before = value.slice(0, slashIndex);
+  const query = value.slice(slashIndex + 1);
+
+  if (slashIndex > 0 && !/\s$/.test(before)) {
+    return null;
+  }
+
+  if (/\s/.test(query)) {
+    return null;
+  }
+
+  return {
+    contentBeforeSlash: before.trimEnd(),
+    query,
+    slashIndex,
+  };
+}
+
 function PureMultimodalInput({
   chatId,
   input,
@@ -101,9 +124,13 @@ function PureMultimodalInput({
   onCancelEdit?: () => void;
   isLoading?: boolean;
 }) {
-  const router = useRouter();
-  const { setTheme, resolvedTheme } = useTheme();
-  const { consumeReferenceDraft, referenceDraft } = useWorkspace();
+  const {
+    activeProjectId,
+    activeTopicId,
+    consumeReferenceDraft,
+    referenceDraft,
+  } = useWorkspace();
+  const { mutate } = useSWRConfig();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { width } = useWindowSize();
   const hasAutoFocused = useRef(false);
@@ -170,67 +197,95 @@ function PureMultimodalInput({
     const val = event.target.value;
     setInput(val);
 
-    if (val.startsWith("/") && !val.includes(" ")) {
+    const slashInvocation = getSlashInvocation(val);
+
+    if (slashInvocation) {
       setSlashOpen(true);
-      setSlashQuery(val.slice(1));
+      setSlashQuery(slashInvocation.query);
       setSlashIndex(0);
     } else {
       setSlashOpen(false);
     }
   };
 
-  const handleSlashSelect = (cmd: SlashCommand) => {
-    setSlashOpen(false);
+  function isSlashCommandDisabled(cmd: SlashCommand) {
+    const slashInvocation = getSlashInvocation(input);
+
+    return cmd.action === "save" && !slashInvocation?.contentBeforeSlash.trim();
+  }
+
+  async function saveInputAsCandidate(contentBeforeSlash: string) {
+    const content = contentBeforeSlash.trim();
+
+    if (!content) {
+      return;
+    }
+
+    if (!activeProjectId || !activeTopicId) {
+      toast.error("Workspace is still loading. Please try again in a moment.");
+      return;
+    }
+
+    const firstLine = content.split(/\r?\n/)[0] ?? "";
+    const title = firstLine.slice(0, 60).trim() || content.slice(0, 60).trim();
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/ir/draft`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: activeProjectId,
+          topic_id: activeTopicId,
+          kind: "unclassified",
+          title,
+          content,
+          source_layer: "manual",
+          created_by: "user",
+          initial_status: "pending",
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new Error(payload?.cause ?? payload?.message ?? "Save failed.");
+    }
+
     setInput("");
+    setLocalStorageInput("");
+    await mutate(
+      (key) => typeof key === "string" && key.includes("/api/ir?"),
+      undefined,
+      { revalidate: true }
+    );
+    toast.success("Saved as candidate.");
+  }
+
+  const handleSlashSelect = async (cmd: SlashCommand) => {
+    const slashInvocation = getSlashInvocation(input);
+
+    if (isSlashCommandDisabled(cmd)) {
+      return;
+    }
+
+    setSlashOpen(false);
+
     switch (cmd.action) {
-      case "new":
-        router.push("/chat/new");
-        break;
-      case "clear":
-        setMessages(() => []);
-        break;
-      case "rename":
-        toast("Rename is available from the sidebar chat menu.");
+      case "save":
+        try {
+          await saveInputAsCandidate(slashInvocation?.contentBeforeSlash ?? "");
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Save failed.");
+        }
         break;
       case "model": {
+        setInput(slashInvocation?.contentBeforeSlash ?? "");
         const modelBtn = document.querySelector<HTMLButtonElement>(
           "[data-testid='model-selector']"
         );
         modelBtn?.click();
         break;
       }
-      case "theme":
-        setTheme(resolvedTheme === "dark" ? "light" : "dark");
-        break;
-      case "delete":
-        toast("Delete this chat?", {
-          action: {
-            label: "Delete",
-            onClick: () => {
-              fetch(
-                `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/chat?id=${chatId}`,
-                { method: "DELETE" }
-              );
-              router.push("/chat/new");
-              toast.success("Chat deleted");
-            },
-          },
-        });
-        break;
-      case "purge":
-        toast("Delete all chats?", {
-          action: {
-            label: "Delete all",
-            onClick: () => {
-              fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/history`, {
-                method: "DELETE",
-              });
-              router.push("/chat/new");
-              toast.success("All chats deleted");
-            },
-          },
-        });
-        break;
       default:
         break;
     }
@@ -425,6 +480,7 @@ function PureMultimodalInput({
       <div className="relative">
         {slashOpen && (
           <SlashCommandMenu
+            isDisabled={isSlashCommandDisabled}
             onClose={() => setSlashOpen(false)}
             onSelect={handleSlashSelect}
             query={slashQuery}
@@ -446,12 +502,22 @@ function PureMultimodalInput({
             );
             return;
           }
-          if (input.startsWith("/")) {
-            const query = input.slice(1).trim();
-            const cmd = slashCommands.find((c) => c.name === query);
-            if (cmd) {
-              handleSlashSelect(cmd);
+          const slashInvocation = getSlashInvocation(input);
+          if (slashInvocation) {
+            const cmd = slashCommands.find(
+              (c) => c.name === slashInvocation.query
+            );
+            if (cmd && !isSlashCommandDisabled(cmd)) {
+              handleSlashSelect(cmd).catch(console.error);
+              return;
             }
+
+            if (cmd) {
+              return;
+            }
+          }
+
+          if (input.trim().startsWith("/")) {
             return;
           }
           if (!input.trim() && attachments.length === 0) {
@@ -519,8 +585,9 @@ function PureMultimodalInput({
               }
               if (e.key === "Enter" || e.key === "Tab") {
                 e.preventDefault();
-                if (filtered[slashIndex]) {
-                  handleSlashSelect(filtered[slashIndex]);
+                const command = filtered[slashIndex];
+                if (command && !isSlashCommandDisabled(command)) {
+                  handleSlashSelect(command).catch(console.error);
                 }
                 return;
               }
@@ -665,7 +732,9 @@ function PureModelSelectorCompact({
   selectedModelId: string;
   onModelChange?: (modelId: string) => void;
 }) {
+  const { activeTopicId, refreshWorkspace } = useWorkspace();
   const [open, setOpen] = useState(false);
+  const selectingModelRef = useRef<string | null>(null);
   const { data: modelsData } = useSWR(
     `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/models`,
     (url: string) => fetch(url).then((r) => r.json()),
@@ -681,6 +750,56 @@ function PureModelSelectorCompact({
     activeModels.find((m: ChatModel) => m.id === selectedModelId) ??
     activeModels.find((m: ChatModel) => m.id === DEFAULT_CHAT_MODEL) ??
     activeModels[0];
+
+  const handleModelSelect = useCallback(
+    (modelId: string) => {
+      if (selectingModelRef.current === modelId) {
+        return;
+      }
+
+      selectingModelRef.current = modelId;
+      onModelChange?.(modelId);
+      setCookie("chat-model", modelId);
+      setOpen(false);
+      setTimeout(() => {
+        document
+          .querySelector<HTMLTextAreaElement>(
+            "[data-testid='multimodal-input']"
+          )
+          ?.focus();
+      }, 50);
+
+      const savePreference = activeTopicId
+        ? fetch(
+            `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/workspace/topics/${activeTopicId}/default-model`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ modelId }),
+            }
+          ).then((response) => {
+            if (!response.ok) {
+              throw new Error("Model preference was not saved.");
+            }
+            return refreshWorkspace();
+          })
+        : Promise.resolve();
+
+      savePreference
+        .catch((error) => {
+          console.error(error);
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Model preference was not saved."
+          );
+        })
+        .finally(() => {
+          selectingModelRef.current = null;
+        });
+    },
+    [activeTopicId, onModelChange, refreshWorkspace]
+  );
 
   if (!selectedModel) {
     return null;
@@ -722,19 +841,10 @@ function PureModelSelectorCompact({
                       model.id === selectedModel.id &&
                         "border-b border-dashed border-foreground/50"
                     )}
+                    data-testid="model-selector-item"
                     key={model.id}
-                    onSelect={() => {
-                      onModelChange?.(model.id);
-                      setCookie("chat-model", model.id);
-                      setOpen(false);
-                      setTimeout(() => {
-                        document
-                          .querySelector<HTMLTextAreaElement>(
-                            "[data-testid='multimodal-input']"
-                          )
-                          ?.focus();
-                      }, 50);
-                    }}
+                    onClick={() => handleModelSelect(model.id)}
+                    onSelect={() => handleModelSelect(model.id)}
                     value={model.id}
                   >
                     <ModelSelectorLogo provider={model.provider} />

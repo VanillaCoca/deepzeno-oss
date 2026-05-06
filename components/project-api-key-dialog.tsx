@@ -239,8 +239,8 @@ export function ProjectApiKeyDialog({
           <DialogTitle>MCP Access</DialogTitle>
           <DialogDescription>
             Generate project-bound API keys for external coding agents. Each key
-            can only read this project's truth and submit candidates back for
-            review.
+            can read this project's truth, write routine truth directly, and
+            route high-impact changes to review.
           </DialogDescription>
         </DialogHeader>
 

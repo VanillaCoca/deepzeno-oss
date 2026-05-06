@@ -6,8 +6,6 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   CircleDotIcon,
-  GitBranchIcon,
-  ListTreeIcon,
   MessageSquareTextIcon,
   PencilIcon,
   PlusIcon,
@@ -15,7 +13,7 @@ import {
   ShieldAlertIcon,
   XIcon,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import useSWR from "swr";
 import { irNodeKey, useIR } from "@/components/ir/ir-provider";
@@ -30,91 +28,27 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useWorkspace } from "@/components/workspace/workspace-provider";
-import type {
-  IRDetail,
-  IREdge,
-  IRKind,
-  IRNode,
-  IRPlanSubtype,
-} from "@/lib/ir/types";
+import { decisionKindOrder, getDecisionKindLabel } from "@/lib/decision-kinds";
+import type { IRDetail, IREdge, IRKind, IRNode } from "@/lib/ir/types";
 import { getIRTypeLabel } from "@/lib/ir/types";
 import { cn, fetcher } from "@/lib/utils";
 
-type TruthMode = "type" | "relation";
 type EditMode = "confirm" | "supersede" | null;
 
 const TRUTH_GROUPS: Array<{
   key: string;
   kind: IRKind;
-  subtype?: IRPlanSubtype | null;
   label: string;
   defaultOpen: boolean;
-}> = [
-  { key: "goal", kind: "goal", label: "Goals", defaultOpen: false },
-  {
-    key: "decision",
-    kind: "plan",
-    subtype: "decision",
-    label: "Decisions",
-    defaultOpen: true,
-  },
-  {
-    key: "constraint",
-    kind: "constraint",
-    label: "Constraints",
-    defaultOpen: true,
-  },
-  {
-    key: "task",
-    kind: "plan",
-    subtype: "task",
-    label: "Tasks",
-    defaultOpen: false,
-  },
-  {
-    key: "milestone",
-    kind: "plan",
-    subtype: "milestone",
-    label: "Milestones",
-    defaultOpen: false,
-  },
-  {
-    key: "open_question",
-    kind: "open_question",
-    label: "Open Questions",
-    defaultOpen: false,
-  },
-  {
-    key: "hypothesis",
-    kind: "hypothesis",
-    label: "Hypotheses",
-    defaultOpen: false,
-  },
-  {
-    key: "principle",
-    kind: "principle",
-    label: "Principles",
-    defaultOpen: false,
-  },
-  {
-    key: "rejection",
-    kind: "rejection",
-    label: "Rejections",
-    defaultOpen: false,
-  },
-  {
-    key: "unclassified",
-    kind: "unclassified",
-    label: "Unclassified",
-    defaultOpen: false,
-  },
-];
+}> = decisionKindOrder.map((kind) => ({
+  key: kind,
+  kind: kind as IRKind,
+  label: getDecisionKindLabel(kind).toLowerCase(),
+  defaultOpen: true,
+}));
 
 function nodeMatchesGroup(node: IRNode, group: (typeof TRUTH_GROUPS)[number]) {
-  return (
-    node.kind === group.kind &&
-    (group.subtype === undefined || node.subtype === group.subtype)
-  );
+  return node.kind === group.kind;
 }
 
 function nodeSearchText(node: IRNode) {
@@ -294,6 +228,157 @@ function DetailRelationList({
   );
 }
 
+type ReEntrySnapshot = {
+  absence_seconds: number | null;
+  last_seen_at: string | null;
+  since: {
+    new_candidates: number;
+    superseded_truth: number;
+    unresolved_open_questions: number;
+    mcp_writes: number;
+  };
+};
+
+const RE_ENTRY_LIGHT_THRESHOLD_SECONDS = 30 * 60;
+const RE_ENTRY_FULL_THRESHOLD_SECONDS = 24 * 60 * 60;
+
+function getReEntryTotal(snapshot: ReEntrySnapshot) {
+  return Object.values(snapshot.since).reduce((sum, count) => sum + count, 0);
+}
+
+function getNeedsReviewCount(snapshot: ReEntrySnapshot) {
+  return (
+    snapshot.since.new_candidates + snapshot.since.unresolved_open_questions
+  );
+}
+
+function shouldShowReEntry(
+  snapshot: ReEntrySnapshot | null,
+  dismissed: boolean
+) {
+  if (dismissed || !snapshot || snapshot.absence_seconds === null) {
+    return false;
+  }
+
+  return (
+    snapshot.absence_seconds >= RE_ENTRY_LIGHT_THRESHOLD_SECONDS &&
+    getReEntryTotal(snapshot) > 0
+  );
+}
+
+function ReEntryBanner({
+  expanded,
+  onDismiss,
+  onGoTo,
+  onToggleExpanded,
+  snapshot,
+}: {
+  expanded: boolean;
+  onDismiss: () => void;
+  onGoTo: (zone: "ideas" | "candidates" | "truth") => void;
+  onToggleExpanded: () => void;
+  snapshot: ReEntrySnapshot;
+}) {
+  const total = getReEntryTotal(snapshot);
+  const needsReview = getNeedsReviewCount(snapshot);
+  const shouldUseFullCard =
+    expanded ||
+    (snapshot.absence_seconds ?? 0) >= RE_ENTRY_FULL_THRESHOLD_SECONDS;
+  const items = [
+    {
+      key: "new_candidates",
+      label: "New candidates",
+      value: snapshot.since.new_candidates,
+      detail: `${snapshot.since.new_candidates} need review`,
+      zone: "candidates" as const,
+    },
+    {
+      key: "superseded_truth",
+      label: "Superseded truth",
+      value: snapshot.since.superseded_truth,
+      detail: `${snapshot.since.superseded_truth} changed`,
+      zone: "truth" as const,
+    },
+    {
+      key: "unresolved_open_questions",
+      label: "Unresolved open questions",
+      value: snapshot.since.unresolved_open_questions,
+      detail: `${snapshot.since.unresolved_open_questions} need review`,
+      zone: "truth" as const,
+    },
+    {
+      key: "mcp_writes",
+      label: "MCP writes",
+      value: snapshot.since.mcp_writes,
+      detail: `${snapshot.since.mcp_writes} agent writes since last visit`,
+      zone: "truth" as const,
+    },
+  ].filter((item) => item.value > 0);
+
+  if (!shouldUseFullCard) {
+    return (
+      <button
+        className="flex w-full items-center justify-between gap-3 border-b border-[var(--ir-border-default)] px-3 py-2 text-left text-xs text-[var(--ir-text-secondary)] hover:bg-[var(--ir-bg-hover)]"
+        onClick={onToggleExpanded}
+        type="button"
+      >
+        <span>
+          Since last visit: {total} updates · {needsReview} need review
+        </span>
+        <ChevronRightIcon className="size-3.5 text-[var(--ir-text-tertiary)]" />
+      </button>
+    );
+  }
+
+  return (
+    <div className="border-b border-[var(--ir-border-default)] bg-[var(--ir-bg-elevated)] px-3 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold text-[var(--ir-text-primary)]">
+            Since last visit
+          </p>
+          <p className="mt-0.5 text-xs text-[var(--ir-text-tertiary)]">
+            {total} updates · {needsReview} need review
+          </p>
+        </div>
+        <Button
+          className="rounded border border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
+          onClick={onDismiss}
+          size="icon-sm"
+          variant="outline"
+        >
+          <XIcon className="size-3.5" />
+        </Button>
+      </div>
+      <div className="mt-3 divide-y divide-[var(--ir-border-default)] border-y border-[var(--ir-border-default)]">
+        {items.map((item) => (
+          <button
+            className="flex w-full items-center justify-between gap-3 px-1 py-2 text-left hover:bg-[var(--ir-bg-hover)]"
+            key={item.key}
+            onClick={() => onGoTo(item.zone)}
+            type="button"
+          >
+            <span className="text-sm text-[var(--ir-text-primary)]">
+              {item.label} ({item.value})
+            </span>
+            <span className="text-xs text-[var(--ir-text-tertiary)]">
+              {item.detail}
+            </span>
+          </button>
+        ))}
+      </div>
+      <Button
+        className="mt-3 w-full rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
+        onClick={onDismiss}
+        size="sm"
+        variant="outline"
+      >
+        Mark all reviewed
+      </Button>
+    </div>
+  );
+}
+
 export function IRPanel() {
   const {
     candidates,
@@ -303,7 +388,6 @@ export function IRPanel() {
     selectNode,
     selectedNodeId,
     truth,
-    truthEdges,
   } = useIR();
   const {
     activeProjectId,
@@ -314,7 +398,10 @@ export function IRPanel() {
   const [ideasExpanded, setIdeasExpanded] = useState(false);
   const [candidatesExpanded, setCandidatesExpanded] = useState(true);
   const [listPanePercent, setListPanePercent] = useState(55);
-  const [truthMode, setTruthMode] = useState<TruthMode>("type");
+  const [reEntrySnapshot, setReEntrySnapshot] =
+    useState<ReEntrySnapshot | null>(null);
+  const [reEntryDismissed, setReEntryDismissed] = useState(false);
+  const [reEntryExpanded, setReEntryExpanded] = useState(false);
   const [search, setSearch] = useState("");
   const [collapsedGroups, setCollapsedGroups] = useState<
     Record<string, boolean>
@@ -350,6 +437,83 @@ export function IRPanel() {
 
     return truth.filter((node) => nodeSearchText(node).includes(query));
   }, [search, truth]);
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setReEntrySnapshot(null);
+      return;
+    }
+
+    let cancelled = false;
+    setReEntryDismissed(false);
+    setReEntryExpanded(false);
+
+    fetcher(
+      `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/projects/${activeProjectId}/re-entry`
+    )
+      .then((payload: ReEntrySnapshot) => {
+        if (!cancelled) {
+          setReEntrySnapshot(payload);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to load re-entry snapshot", error);
+        if (!cancelled) {
+          setReEntrySnapshot(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProjectId]);
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      return;
+    }
+
+    const url = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/projects/${activeProjectId}/re-entry/mark-seen`;
+
+    function markSeenOnExit() {
+      fetch(url, { keepalive: true, method: "POST" }).catch(() => undefined);
+    }
+
+    window.addEventListener("pagehide", markSeenOnExit);
+    return () => {
+      window.removeEventListener("pagehide", markSeenOnExit);
+    };
+  }, [activeProjectId]);
+
+  async function markReEntrySeen() {
+    if (!activeProjectId) {
+      return;
+    }
+
+    setReEntryDismissed(true);
+
+    try {
+      await postJSON(`/api/projects/${activeProjectId}/re-entry/mark-seen`);
+    } catch (error) {
+      console.error("Failed to mark re-entry reviewed", error);
+    }
+  }
+
+  function handleReEntryGoTo(zone: "ideas" | "candidates" | "truth") {
+    if (zone === "ideas") {
+      setIdeasExpanded(true);
+    }
+
+    if (zone === "candidates") {
+      setCandidatesExpanded(true);
+    }
+
+    requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>(`[data-testid="ir-${zone}-zone"]`)
+        ?.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+  }
 
   async function runMutation(
     action: () => Promise<
@@ -515,38 +679,22 @@ export function IRPanel() {
     window.addEventListener("pointerup", handlePointerUp, { once: true });
   }
 
-  const relationModeNodes = useMemo(() => {
-    if (!selectedNodeId) {
-      return [];
-    }
-
-    const relatedIds = new Set<string>();
-
-    for (const edge of truthEdges) {
-      if (edge.fromNode === selectedNodeId) {
-        relatedIds.add(edge.toNode);
-      }
-
-      if (edge.toNode === selectedNodeId) {
-        relatedIds.add(edge.fromNode);
-      }
-    }
-
-    return filteredTruth.filter(
-      (node) => node.id === selectedNodeId || relatedIds.has(node.id)
-    );
-  }, [filteredTruth, selectedNodeId, truthEdges]);
-
   return (
     <div
       className="flex min-h-0 flex-1 flex-col bg-[var(--ir-bg-panel)] text-[var(--ir-text-primary)]"
       data-testid="ir-panel"
       ref={panelRef}
     >
-      <div className="border-b border-[var(--ir-border-default)] px-3 py-2 text-xs text-[var(--ir-text-tertiary)]">
-        Since last visit: {candidates.length} ·{" "}
-        {candidates.length > 0 ? "1 warning" : "0 warnings"}
-      </div>
+      {shouldShowReEntry(reEntrySnapshot, reEntryDismissed) &&
+      reEntrySnapshot ? (
+        <ReEntryBanner
+          expanded={reEntryExpanded}
+          onDismiss={markReEntrySeen}
+          onGoTo={handleReEntryGoTo}
+          onToggleExpanded={() => setReEntryExpanded(true)}
+          snapshot={reEntrySnapshot}
+        />
+      ) : null}
 
       <div
         className="flex min-h-0 flex-col overflow-y-auto px-0 py-2"
@@ -555,12 +703,16 @@ export function IRPanel() {
         <ZoneHeader
           count={ideas.length}
           expanded={ideasExpanded}
-          hidden={ideas.length === 0}
           label="Ideas"
           onToggle={() => setIdeasExpanded((current) => !current)}
         />
         {ideasExpanded ? (
           <div className="mb-2" data-testid="ir-ideas-zone">
+            {ideas.length === 0 && !isLoading ? (
+              <p className="px-3.5 py-2 text-sm text-[var(--ir-text-tertiary)]">
+                No ideas yet.
+              </p>
+            ) : null}
             {ideas.slice(0, 10).map((node) => (
               <NodeButton
                 key={node.id}
@@ -612,32 +764,6 @@ export function IRPanel() {
                 ({truth.length})
               </span>
             </p>
-            <div className="flex rounded border border-[var(--ir-border-strong)] bg-transparent">
-              <Button
-                className={cn(
-                  "h-7 rounded-none border-0 bg-transparent text-xs hover:bg-[var(--ir-bg-hover)]",
-                  truthMode === "type" && "bg-[var(--ir-bg-hover)]"
-                )}
-                onClick={() => setTruthMode("type")}
-                size="xs"
-                variant="ghost"
-              >
-                <ListTreeIcon className="size-3" />
-                Type
-              </Button>
-              <Button
-                className={cn(
-                  "h-7 rounded-none border-0 bg-transparent text-xs hover:bg-[var(--ir-bg-hover)]",
-                  truthMode === "relation" && "bg-[var(--ir-bg-hover)]"
-                )}
-                onClick={() => setTruthMode("relation")}
-                size="xs"
-                variant="ghost"
-              >
-                <GitBranchIcon className="size-3" />
-                Relation
-              </Button>
-            </div>
           </div>
           <div className="relative">
             <SearchIcon className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-[var(--ir-text-tertiary)]" />
@@ -651,71 +777,52 @@ export function IRPanel() {
         </div>
 
         <div className="py-2" data-testid="ir-truth-zone">
-          {truthMode === "relation" && relationModeNodes.length > 0
-            ? relationModeNodes.map((node) => (
-                <NodeButton
-                  key={node.id}
-                  node={node}
-                  onSelect={selectNode}
-                  selected={selectedNodeId === node.id}
-                />
-              ))
-            : null}
+          {TRUTH_GROUPS.map((group) => {
+            const nodes = filteredTruth.filter((node) =>
+              nodeMatchesGroup(node, group)
+            );
 
-          {truthMode === "relation" && relationModeNodes.length === 0 ? (
-            <p className="px-3.5 py-2 text-sm text-[var(--ir-text-tertiary)]">
-              Select a truth node to inspect relations.
-            </p>
-          ) : null}
+            if (nodes.length === 0) {
+              return null;
+            }
 
-          {truthMode === "type"
-            ? TRUTH_GROUPS.map((group) => {
-                const nodes = filteredTruth.filter((node) =>
-                  nodeMatchesGroup(node, group)
-                );
+            const collapsed = collapsedGroups[group.key] ?? false;
 
-                if (nodes.length === 0) {
-                  return null;
-                }
-
-                const collapsed = collapsedGroups[group.key] ?? false;
-
-                return (
-                  <div key={group.key}>
-                    <button
-                      className="flex h-8 w-full items-center gap-2 px-3.5 text-left text-[13px] font-medium text-[var(--ir-text-secondary)]"
-                      onClick={() =>
-                        setCollapsedGroups((current) => ({
-                          ...current,
-                          [group.key]: !collapsed,
-                        }))
-                      }
-                      type="button"
-                    >
-                      {collapsed ? (
-                        <ChevronRightIcon className="size-3.5" />
-                      ) : (
-                        <ChevronDownIcon className="size-3.5" />
-                      )}
-                      <span>{group.label}</span>
-                      <span className="text-[var(--ir-text-tertiary)]">
-                        ({nodes.length})
-                      </span>
-                    </button>
-                    {collapsed
-                      ? null
-                      : nodes.map((node) => (
-                          <NodeButton
-                            key={node.id}
-                            node={node}
-                            onSelect={selectNode}
-                            selected={selectedNodeId === node.id}
-                          />
-                        ))}
-                  </div>
-                );
-              })
-            : null}
+            return (
+              <div key={group.key}>
+                <button
+                  className="flex h-8 w-full items-center gap-2 px-3.5 text-left text-[13px] font-medium text-[var(--ir-text-secondary)]"
+                  onClick={() =>
+                    setCollapsedGroups((current) => ({
+                      ...current,
+                      [group.key]: !collapsed,
+                    }))
+                  }
+                  type="button"
+                >
+                  {collapsed ? (
+                    <ChevronRightIcon className="size-3.5" />
+                  ) : (
+                    <ChevronDownIcon className="size-3.5" />
+                  )}
+                  <span>{group.label}</span>
+                  <span className="text-[var(--ir-text-tertiary)]">
+                    ({nodes.length})
+                  </span>
+                </button>
+                {collapsed
+                  ? null
+                  : nodes.map((node) => (
+                      <NodeButton
+                        key={node.id}
+                        node={node}
+                        onSelect={selectNode}
+                        selected={selectedNodeId === node.id}
+                      />
+                    ))}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -802,8 +909,7 @@ export function IRPanel() {
                 </p>
               </section>
 
-              {selectedNode.status === "pending" &&
-              selectedNode.kind === "unclassified" ? (
+              {selectedNode.kind === "unclassified" ? (
                 <section className="mt-4 space-y-2 border border-[var(--ir-warning-stripe)] bg-[var(--ir-warning-bg)] p-2">
                   <p className="text-xs font-semibold text-[var(--ir-warning-fg)]">
                     Kind: not yet classified

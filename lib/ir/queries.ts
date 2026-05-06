@@ -884,7 +884,11 @@ export async function reclassifyIRNodeForUser({
 }) {
   const node = await getIRNodeForUser({ id, userId });
 
-  if (!node || node.status !== "pending" || node.kind !== "unclassified") {
+  if (
+    !node ||
+    (node.status !== "pending" && node.status !== "idea") ||
+    node.kind !== "unclassified"
+  ) {
     throw new IRConflictError("IR node cannot be reclassified.");
   }
 
@@ -902,7 +906,7 @@ export async function reclassifyIRNodeForUser({
         subtype: subtype ?? null,
       })
       .eq("id", id)
-      .eq("status", "pending")
+      .in("status", ["pending", "idea"])
       .eq("kind", "unclassified")
       .select("*")
       .single(),

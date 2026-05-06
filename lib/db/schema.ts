@@ -139,6 +139,7 @@ export const topic = pgTable("topics", {
     .references(() => project.id, { onDelete: "cascade" }),
   label: text("label").notNull(),
   isGeneral: boolean("is_general").notNull().default(false),
+  defaultModelId: text("default_model_id"),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   position: integer("position").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -147,6 +148,26 @@ export const topic = pgTable("topics", {
 });
 
 export type Topic = InferSelectModel<typeof topic>;
+
+export const projectUserViewState = pgTable(
+  "project_user_view_state",
+  {
+    userId: uuid("user_id").notNull(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.userId, table.projectId] }),
+  })
+);
+
+export type ProjectUserViewState = InferSelectModel<
+  typeof projectUserViewState
+>;
 
 export const conversation = pgTable("conversations", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
@@ -201,6 +222,7 @@ export const decision = pgTable("decisions", {
   status: text("status").notNull().default("active"),
   sensitivity: text("sensitivity").notNull().default("normal"),
   relevantMessageIds: uuid("relevant_message_ids").array(),
+  codeAnchors: jsonb("code_anchors"),
   createdFromMessageId: uuid("created_from_message_id").references(
     () => workspaceMessage.id
   ),
@@ -260,6 +282,11 @@ export const candidateDecision = pgTable("candidate_decisions", {
   proposedRationale: text("proposed_rationale"),
   proposedKind: text("proposed_kind").default("plan"),
   proposedWeight: text("proposed_weight").default("normal"),
+  proposedForDecisionId: uuid("proposed_for_decision_id").references(
+    () => decision.id
+  ),
+  proposedStatus: text("proposed_status"),
+  proposedIntent: text("proposed_intent"),
   confidence: real("confidence"),
   preSelected: boolean("pre_selected").notNull().default(true),
   status: text("status").notNull().default("pending"),

@@ -44,12 +44,17 @@ export async function GET(request: Request) {
       subtype: input.subtype,
       query: input.q,
     });
+    const nodeIds = new Set(nodes.map((node) => node.id));
     const edges =
       input.status === "active"
-        ? await listIREdgesForProject({
-            userId: session.user.id,
-            projectId: input.project_id,
-          })
+        ? (
+            await listIREdgesForProject({
+              userId: session.user.id,
+              projectId: input.project_id,
+            })
+          ).filter(
+            (edge) => nodeIds.has(edge.fromNode) && nodeIds.has(edge.toNode)
+          )
         : [];
 
     return Response.json({ nodes, edges });

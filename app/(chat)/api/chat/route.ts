@@ -12,7 +12,11 @@ import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream";
 import { auth, type UserType } from "@/app/(auth)/auth";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
-import { getCapabilities, resolveChatModelSelection } from "@/lib/ai/models";
+import {
+  getActiveModels,
+  getCapabilities,
+  resolveChatModelSelection,
+} from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
@@ -55,6 +59,19 @@ import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
 export const maxDuration = 60;
+
+function getMessageModelOverride(text: string) {
+  const match = text.match(/(?:^|\s)@([^\s]+)/);
+
+  if (!match) {
+    return null;
+  }
+
+  const mentionedModel = match[1];
+  const activeModels = getActiveModels(process.env);
+
+  return activeModels.find((model) => model.id === mentionedModel)?.id ?? null;
+}
 
 function getStreamContext() {
   try {
@@ -122,20 +139,6 @@ export async function POST(request: Request) {
       return new ChatbotError("unauthorized:chat").toResponse();
     }
 
-    const resolvedModel = resolveChatModelSelection(
-      selectedChatModel,
-      process.env
-    );
-
-    if (!resolvedModel) {
-      return new ChatbotError(
-        "bad_request:api",
-        "No AI model is configured. Add Anthropic, OpenAI, DeepSeek, DashScope, or AI Gateway environment variables."
-      ).toResponse();
-    }
-
-    const chatModel = resolvedModel.id;
-
     await checkIpRateLimit(ipAddress(request));
 
     const userType: UserType = session.user.type;
@@ -162,7 +165,26 @@ export async function POST(request: Request) {
       topicId: workspaceSelection.topic.id,
       conversationId: workspaceSelection.conversation.id,
       isGeneralTopic: workspaceSelection.topic.isGeneral,
+      topicDefaultModelId: workspaceSelection.topic.defaultModelId,
     });
+    const messageModelOverride = message?.role
+      ? getMessageModelOverride(getTextFromMessage(message))
+      : null;
+    const resolvedModel = resolveChatModelSelection(
+      messageModelOverride ??
+        workspaceSelection.topic.defaultModelId ??
+        selectedChatModel,
+      process.env
+    );
+
+    if (!resolvedModel) {
+      return new ChatbotError(
+        "bad_request:api",
+        "No AI model is configured. Add Anthropic, OpenAI, DeepSeek, DashScope, or AI Gateway environment variables."
+      ).toResponse();
+    }
+
+    const chatModel = resolvedModel.id;
     const shouldInjectWorkspaceContext = !workspaceSelection.topic.isGeneral;
 
     const chat = await getChatById({ id });
