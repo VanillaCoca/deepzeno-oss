@@ -165,6 +165,17 @@ test.describe("Workspace IR panel flow", () => {
     ).toBeVisible();
   });
 
+  test("recovers an invalid chat URL to the active workspace conversation", async ({
+    page,
+  }) => {
+    const invalidConversationId = randomUUID();
+
+    await page.goto(`/chat/${invalidConversationId}`);
+    await expect(page.getByTestId("multimodal-input")).toBeEnabled();
+    await expect.poll(() => page.url()).not.toContain(invalidConversationId);
+    await expect(page).toHaveURL(/\/chat\/[\w-]+$/);
+  });
+
   test("persists AI inline IR markers as pending candidates", async ({
     page,
   }) => {

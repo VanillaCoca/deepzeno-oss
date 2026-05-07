@@ -86,7 +86,6 @@ function getSlashInvocation(value: string) {
 }
 
 function PureMultimodalInput({
-  chatId,
   input,
   setInput,
   status,
@@ -104,7 +103,6 @@ function PureMultimodalInput({
   onCancelEdit,
   isLoading,
 }: {
-  chatId: string;
   input: string;
   setInput: Dispatch<SetStateAction<string>>;
   status: UseChatHelpers<ChatMessage>["status"];
@@ -127,6 +125,7 @@ function PureMultimodalInput({
   const {
     activeProjectId,
     activeTopicId,
+    currentConversationId,
     consumeReferenceDraft,
     referenceDraft,
   } = useWorkspace();
@@ -296,12 +295,20 @@ function PureMultimodalInput({
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
   const [slashIndex, setSlashIndex] = useState(0);
+  const isWorkspaceReady = Boolean(
+    activeProjectId && activeTopicId && currentConversationId
+  );
 
   const submitForm = useCallback(() => {
+    if (!isWorkspaceReady || !currentConversationId) {
+      toast.error("Workspace is still loading. Please try again in a moment.");
+      return;
+    }
+
     window.history.pushState(
       {},
       "",
-      `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/chat/${chatId}`
+      `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/chat/${currentConversationId}`
     );
 
     sendMessage({
@@ -335,7 +342,8 @@ function PureMultimodalInput({
     setAttachments,
     setLocalStorageInput,
     width,
-    chatId,
+    currentConversationId,
+    isWorkspaceReady,
   ]);
 
   const uploadFile = useCallback(async (file: File) => {
@@ -502,6 +510,12 @@ function PureMultimodalInput({
             );
             return;
           }
+          if (!isWorkspaceReady) {
+            toast.error(
+              "Workspace is still loading. Please try again in a moment."
+            );
+            return;
+          }
           const slashInvocation = getSlashInvocation(input);
           if (slashInvocation) {
             const cmd = slashCommands.find(
@@ -637,7 +651,10 @@ function PureMultimodalInput({
               )}
               data-testid="send-button"
               disabled={
-                !input.trim() || uploadQueue.length > 0 || Boolean(isLoading)
+                !input.trim() ||
+                uploadQueue.length > 0 ||
+                Boolean(isLoading) ||
+                !isWorkspaceReady
               }
               status={status}
               variant="secondary"

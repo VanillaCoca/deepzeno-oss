@@ -326,6 +326,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
   });
 
   const isReadonly = isArchivedTopicReadonly || (chatData?.isReadonly ?? false);
+  const isChatLoading = isWorkspaceLoading || !isWorkspaceReady || isLoading;
 
   const { data: votes } = useSWR<Vote[]>(
     !isReadonly && messages.length >= 2
@@ -349,7 +350,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       setInput,
       visibilityType: visibility,
       isReadonly,
-      isLoading: isWorkspaceLoading || isLoading,
+      isLoading: isChatLoading,
       votes,
       currentModelId,
       setCurrentModelId,
@@ -368,8 +369,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       input,
       visibility,
       isReadonly,
-      isWorkspaceLoading,
-      isLoading,
+      isChatLoading,
       votes,
       currentModelId,
       setCurrentModelId,

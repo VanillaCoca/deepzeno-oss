@@ -138,7 +138,6 @@ export function ChatShell() {
 
                   <MultimodalInput
                     attachments={attachments}
-                    chatId={chatId}
                     editingMessage={editingMessage}
                     input={input}
                     isLoading={isLoading}
