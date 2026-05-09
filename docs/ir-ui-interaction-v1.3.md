@@ -76,107 +76,119 @@ The legacy By Type view is **kept** as a secondary mode (§7), accessible via th
 
 The status char sits at the very start of a node row, in monospace, with a single space after it. Color may be used as **secondary** reinforcement (e.g. `idea` slightly desaturated) but the char is the source of truth.
 
-### 2.2 Kind glyphs + 3-letter codes
+### 2.2 Kind codes (right-aligned pill, no glyph)
 
-| kind | glyph | code | color hint (optional) |
-|---|---|---|---|
-| `goal` | `◆` | `goal` | green-dim |
-| `plan/decision` | `▣` | `dec` | blue-dim |
-| `plan/task` | `☐` | `task` | blue-dim |
-| `plan/milestone` | `▲` | `mst` | blue-dim |
-| `constraint` | `▮` | `cstr` | amber-dim |
-| `principle` | `§` | `prn` | teal-dim |
-| `hypothesis` | `◌` | `hyp` | purple-dim |
-| `open_question` | `?` | `q` | yellow-dim |
-| `rejection` | `⊘` | `rej` | red-dim (distinct from superseded by row context) |
-| `unclassified` | `·` | `?` | gray |
+Kind is **NOT** rendered as a glyph in the row body. It appears as a small muted pill on the **right** end of each row, after the short_id. This keeps the row's left edge uncluttered — only the status dot carries semantic color.
 
-Row format (monospace, single line):
+| kind | code | color hint (pill background) |
+|---|---|---|
+| `goal` | `goal` | green-dim |
+| `plan/decision` | `dec` | blue-dim |
+| `plan/task` | `task` | blue-dim |
+| `plan/milestone` | `mst` | blue-dim |
+| `constraint` | `cstr` | amber-dim |
+| `principle` | `prn` | teal-dim |
+| `hypothesis` | `hyp` | purple-dim |
+| `open_question` | `q` | yellow-dim |
+| `rejection` | `rej` | red-dim |
+| `unclassified` | `?` | gray |
 
-```
-{status} {kind_glyph} {code:4}  {short_id:4}  {title}        {trailing_meta}
-```
+Codes are 1–4 chars; the pill auto-sizes (no padding to a fixed width). Background is 8% opacity of the color hint, foreground is 70% opacity. **No glyph icon inside the pill** — code text only. Designed to read at a glance ("oh that's a `dec`") without competing with the title.
 
-- `code` left-padded to 4 chars (`dec ` / `task` / `cstr` / `prn ` / `q   ` / `goal` / `mst ` / `hyp ` / `rej ` / `?   `)
-- `short_id` left-padded to 4 chars (`G1  ` / `D17 ` / `Q3  `)
-- `title` truncated to fit row width; tail-ellipsis with `…`
-- `trailing_meta` only on hover; otherwise empty
+### 2.3 Edge rendering — minimal by default
 
-Example row body (no indent, no connector):
+The connector between parent and child is a **plain horizontal line** (`────`) for all default relation types. Only three cases get explicit visual treatment:
 
-```
-● ▣ dec   D17   IR 用 Supabase + PostgreSQL 持久化
-○ ◌ hyp   H3    solo founder 是最早付费人群
-◐ ?  q    Q1    Tree 是否作为默认视图
-⊘ ▣ dec   D5    用 Firebase 不用 Supabase            ← superseded, struck-through
-```
+| relation | rendering | where |
+|---|---|---|
+| `implies`, `depends_on`, `refines` (default cases) | `────` plain line, foreground-muted | connector |
+| `resolves` (child answers parent question) | `────` line, plus inline label `↳ resolves` after title | inline |
+| `contradicts` | `────` line in red, plus inline label `↯ contradicts` after title | inline, red |
+| `depends_on` *when parent.kind=`constraint`* | `────` line, plus inline label `· constrained` after title | inline, amber |
+| `supersedes` | **not rendered in tree** (lives in Detail version chain) | — |
 
-### 2.3 Edge connector characters (between parent and child)
+The inline label sits in the trailing metadata column (between title and short_id), 11px muted text. **Most edges (the default `implies`/`depends_on`/`refines` cases) carry no inline label** — their existence as a tree connection is meaning enough.
 
-The connector char is placed **on the line that branches into the child**, between the indent guide and the child's status char.
-
-| relation | char | reading | rendering color |
-|---|---|---|---|
-| `implies` | `►` | parent → child (parent导出子) | foreground |
-| `depends_on` | `┊` | child depends on parent (子依赖父) | muted |
-| `depends_on` *when parent.kind=`constraint`* | `━` | child constrained by parent | amber |
-| `implies` *when parent.kind=`hypothesis`* | `◌` | parent hypothesizes child | purple |
-| `resolves` | `‖` | child answers parent question | yellow |
-| `refines` | `◇` | child refines parent | foreground-dim |
-| `contradicts` | `↯` | child conflicts with parent | red |
-| `supersedes` | — | **never rendered in tree** (lives in Detail's version chain) | — |
-
-Important: the connector char specializes by `(relation, parent.kind)` for two cases (constraint and hypothesis), so users see "constrained by" and "hypothesizes" semantics without the data layer needing extra relation values. Data stays at 6 enum values; rendering disambiguates.
+Why this is different from v1.3 draft 1: a per-relation glyph zoo (`►┊◌━‖◇`) inside the connector forced the eye to decode 6 different edge symbols on every row, which was exactly the visual noise this redesign is fighting. Default relations need no label; the indent + line carries the structure. Only **interesting** relations (resolves a question, contradicts something, scoped by a constraint) get a label.
 
 ### 2.4 Indent guides
 
 ```
-│   = vertical guide between siblings
-├── = T-junction at a sibling that has more siblings below
-└── = L-junction at the last sibling
+│       = vertical guide between siblings
+├────   = T-junction at a sibling that has more siblings below
+└────   = L-junction at the last sibling
 ```
 
-These three characters compose the indent column. After the indent column ends, render the relation char, one space, then the row body. Indent step is 12px (CSS) but for ASCII reasoning each `│` / `├` / `└` is one column.
+The junction extends with **4-dash horizontal line** (not a single char) before the row body, so hierarchy reads with weight at a glance. After the junction's dashes there is a 2-space gap, then the row body's status dot. CSS column widths in §3.
 
-Example fragment:
+### 2.5 Information layering — left / center / right
+
+A row has **three semantic regions** that don't compete:
 
 ```
-● ◆ goal  G1    让判断得以积累
-│
-├──►  ● ▣ dec   D17   IR 用 Supabase + PostgreSQL
-│     │
-│     ├──┊  ● ▣ dec   D2    Supabase free tier 够用
-│     └──┊  ○ ▣ dec   D8    Daily backup pipeline
-│
-├──◌  ○ ◌ hyp   H3    solo founder 是最早付费人群
-│
-└──‖  ● ▣ dec   D9    Tree 作为默认视图              ↑ resolves Q1
+[indent + connector + status dot]    [title — flex grow]    [inline label?]  [short_id]  [kind pill]  [↑N?]
+←──── structure ────→                ←── content ──→        ←──── metadata ────→
 ```
 
-(Last row's `↑ resolves Q1` is the trailing_meta hover hint, normally hidden.)
+- **Left region (structure)**: indent guides, connector dashes, status dot. Mono-color (foreground at appropriate opacity for status). Carries hierarchy + lifecycle state.
+- **Center region (content)**: the title — primary visual element. 14px sans, medium weight, full color. This is what the user reads.
+- **Right region (metadata)**: optional inline relation label, then short_id (mono, 4ch), then kind pill, then optional `↑N` shadow marker. All 11–12px, muted. Identifying / categorizing info, not for reading flow.
+
+The three regions read from left to right corresponds to "where am I → what am I → what kind of thing am I" — matches scan order and avoids forcing the eye back-and-forth.
+
+Example fragment (rendered widths approximate, monospace structure / sans content):
+
+```
+●  让判断得以积累                                     G1   goal
+│
+├────  ●  IR 用 Supabase + PostgreSQL 持久化           D17  dec
+│        │
+│        ├────  ●  Supabase free tier 够用             D2   dec
+│        └────  ●  Daily backup pipeline               D8   dec
+│
+├────  ◌  solo founder 是最早付费人群                   H3   hyp
+│
+└────  ●  Tree 作为默认视图                  ↳ resolves Q1   D9   dec
+
+●  3-person team · 10-day sprint                      C1   cstr
+└────  ●  Supabase + PostgreSQL          · constrained  D2   dec   ↑1
+```
+
+Notes:
+- Default `implies`/`depends_on` edges: just `────` line, no label
+- D9 has inline `↳ resolves Q1` because its edge to Q1 is a `resolves` relation
+- D2 under C1 has inline `· constrained` because parent.kind = `constraint`
+- D2 also shows `↑1` shadow marker because it appears under both D17 (primary) and C1 (shadow)
 
 ---
 
 ## 3. Layout & density specs
 
 ```
-row height            : 24px
-indent step           : 12px (compresses to 8px after depth 4)
+right panel width     : 540px default (was 480), 440px min, 720px max — drag-resizable
+                        (the wider default is necessary to give title + metadata
+                         enough room without truncation)
+
+row height            : 28px (was 24px — more breathing room for scan)
+indent step           : 16px per depth level (room for 4-dash connector + space)
 indent guide          : 1px solid rgba(foreground, 0.3)
-font                  : 13px
-  - status / kind glyph / code / short_id / connector : monospace (Geist Mono / JetBrains Mono)
-  - title                                              : sans (Geist Sans)
+
+fonts:
+  - status dot               : 14px sans, full color
+  - indent / connector dashes: 13px monospace, muted
+  - title                    : 14px sans, weight 500 (medium) — HERO of the row
+  - inline relation label    : 11px sans, muted (e.g. "↳ resolves", "· constrained")
+  - short_id                 : 12px monospace, muted
+  - kind pill                : 11px sans, weight 500, with 8% bg + 70% fg of kind hint color
+
 hover row             : background rgba(foreground, 0.04)
 selected row          : 2px left accent border, no background fill
-                        (preserves tree structure visually)
-trailing meta         : right-aligned, only on hover, 11px, muted
-                        format: ↑{parents} ↓{children} · {age}
-                        e.g. "↑2 ↓5 · 4d"
+trailing shadow marker: ↑N, 11px monospace muted, only on multi-parent rows
 ```
 
-Width: the truth panel is fixed 360px in v1.2. v1.3 keeps that. At depth ≥ 4, indent compresses to 8px; at depth ≥ 6, the panel auto-scrolls horizontally rather than wrap (devs prefer over-flow over wrap).
+At depth ≥ 4, indent compresses to 12px to avoid horizontal scroll. At depth ≥ 6, panel scrolls horizontally rather than wrap (devs prefer over-flow over wrap).
 
-Mobile (< 768px): tree mode disabled, falls back to Type mode.
+Mobile (< 768px): right panel collapses, falls back to Type mode list when expanded.
 
 ---
 
@@ -470,21 +482,25 @@ Explicitly **not** addressed by this spec:
 For quick scanning during code review:
 
 ```
-ROW HEAD (3 chars + 4 chars):
-  ●○◐⊘  status
-  ◆▣☐▲▮§◌?⊘·  kind glyph
-  goal/dec/task/mst/cstr/prn/hyp/q/rej/?  code (4-char left-padded)
+LEFT (structure column):
+  │       vertical guide
+  ├────   T-junction with 4-dash extension
+  └────   L-junction with 4-dash extension
 
-CONNECTOR (1-2 chars):
-  │├└   indent grammar
-  ►┊━◌?↯‖◇  edge glyphs (depends on relation × parent.kind)
+STATUS (single colored dot, only semantic glyph in row body):
+  ●  active     ○  pending     ◐  idea     ⊘  superseded     ·  dismissed
 
-ROW BODY:
-  D17   short_id (4-char left-padded)
-  IR 用 Supabase…   title (truncated to fit)
+CENTER (content):
+  Title — 14px sans, weight 500 — the hero of every row
 
-TRAILING (hover only):
-  ↑2 ↓5 · 4d   parents/children/age
-  ↑3  also under G1   shadow marker for multi-parent
+INLINE RELATION LABEL (only on non-default relations):
+  ↳ resolves    when edge.relation = resolves
+  ↯ contradicts when edge.relation = contradicts (red)
+  · constrained when edge.relation = depends_on AND parent.kind = constraint
+
+RIGHT (metadata column, all 11–12px muted):
+  D17        short_id (mono, ≤4 chars)
+  dec        kind code in colored pill
+  ↑N         shadow marker (multi-parent only)
 ```
 
