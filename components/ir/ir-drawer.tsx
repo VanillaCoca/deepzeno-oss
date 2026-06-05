@@ -386,9 +386,10 @@ export function IRDrawer({
         aria-hidden={!open}
         className={cn(
           "fixed inset-y-0 right-0 z-40 flex w-[420px] max-w-[90vw] flex-col border-l border-[var(--ir-border-default)] bg-[var(--ir-bg-panel)] shadow-xl transition-transform duration-200",
-          open ? "translate-x-0" : "translate-x-full"
+          open ? "translate-x-0" : "pointer-events-none translate-x-full"
         )}
         data-testid="ir-drawer"
+        inert={!open}
       >
         <header className="flex items-center justify-between border-b border-[var(--ir-border-default)] px-4 py-3">
           <span className="text-sm font-medium text-[var(--ir-text-primary)]">
