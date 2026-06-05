@@ -13,10 +13,10 @@ import {
   XIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 import useSWR from "swr";
 import { irNodeKey, useIR } from "@/components/ir/ir-provider";
 import { TruthGraph } from "@/components/ir/truth-graph";
+import { postJSON, useIRActions } from "@/components/ir/use-ir-actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,29 +28,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useWorkspace } from "@/components/workspace/workspace-provider";
-import type { IRDetail, IREdge, IRKind, IRNode } from "@/lib/ir/types";
+import type { IRDetail, IREdge, IRNode } from "@/lib/ir/types";
 import { getIRTypeLabel } from "@/lib/ir/types";
 import { cn, fetcher } from "@/lib/utils";
-
-type EditMode = "confirm" | "supersede" | null;
-
-async function postJSON<T>(path: string, body?: Record<string, unknown>) {
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}${path}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body ?? {}),
-    }
-  );
-
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null);
-    throw new Error(payload?.cause ?? payload?.message ?? "Request failed");
-  }
-
-  return (await response.json()) as T;
-}
 
 function StatusBadge({ status }: { status: IRNode["status"] }) {
   return (
@@ -353,7 +333,6 @@ export function IRPanel() {
     candidates,
     ideas,
     isLoading,
-    refreshIR,
     selectNode,
     selectedNodeId,
     truth,
@@ -361,13 +340,7 @@ export function IRPanel() {
     unassignedCandidates,
     unassignedIdeas,
   } = useIR();
-  const {
-    activeProjectId,
-    activeTopicId,
-    bringDecisionToSandbox,
-    queueReferenceDraft,
-    topics,
-  } = useWorkspace();
+  const { activeProjectId, topics } = useWorkspace();
   const [ideasExpanded, setIdeasExpanded] = useState(false);
   const [candidatesExpanded, setCandidatesExpanded] = useState(true);
   const [unassignedExpanded, setUnassignedExpanded] = useState(false);
@@ -376,14 +349,6 @@ export function IRPanel() {
     useState<ReEntrySnapshot | null>(null);
   const [reEntryDismissed, setReEntryDismissed] = useState(false);
   const [reEntryExpanded, setReEntryExpanded] = useState(false);
-  const [editMode, setEditMode] = useState<EditMode>(null);
-  const [draftTitle, setDraftTitle] = useState("");
-  const [draftContent, setDraftContent] = useState("");
-  const [draftRationale, setDraftRationale] = useState("");
-  const [assignmentTopicId, setAssignmentTopicId] = useState("");
-  const [newTopicLabel, setNewTopicLabel] = useState("");
-  const [isMutating, setIsMutating] = useState(false);
-  const [kindChoice, setKindChoice] = useState("plan:decision");
   const panelRef = useRef<HTMLDivElement>(null);
   const { data: detail, mutate: mutateDetail } = useSWR<IRDetail>(
     irNodeKey(selectedNodeId),
@@ -400,6 +365,9 @@ export function IRPanel() {
       ...truth,
     ].find((node) => node.id === selectedNodeId) ??
     null;
+
+  const actions = useIRActions(selectedNode, mutateDetail);
+
   const unassignedPool = useMemo(
     () => [...unassignedCandidates, ...unassignedIdeas],
     [unassignedCandidates, unassignedIdeas]
@@ -408,37 +376,12 @@ export function IRPanel() {
     () => topics.map((topic) => ({ id: topic.id, label: topic.label })),
     [topics]
   );
-  const assignableTopics = useMemo(
-    () =>
-      topics.filter(
-        (topic) =>
-          !topic.isGeneral &&
-          !topic.archivedAt &&
-          topic.status !== "superseded" &&
-          topic.status !== "dismissed"
-      ),
-    [topics]
-  );
 
   useEffect(() => {
     if (unassignedPool.length > 0) {
       setUnassignedExpanded(true);
     }
   }, [unassignedPool.length]);
-
-  useEffect(() => {
-    if (!selectedNode || selectedNode.topicId) {
-      return;
-    }
-
-    const preferred =
-      assignableTopics.find((topic) => topic.id === activeTopicId)?.id ??
-      assignableTopics[0]?.id ??
-      "";
-
-    setAssignmentTopicId(preferred);
-    setNewTopicLabel("");
-  }, [activeTopicId, assignableTopics, selectedNode]);
 
   useEffect(() => {
     if (!activeProjectId) {
@@ -515,188 +458,6 @@ export function IRPanel() {
         .querySelector<HTMLElement>(`[data-testid="ir-${zone}-zone"]`)
         ?.scrollIntoView({ block: "start", behavior: "smooth" });
     });
-  }
-
-  async function runMutation(
-    action: () => Promise<
-      { node?: IRNode; new_id?: string } | IRDetail | unknown
-    >,
-    successMessage: string
-  ) {
-    setIsMutating(true);
-
-    try {
-      const payload = await action();
-      await refreshIR();
-      await mutateDetail();
-
-      if (payload && typeof payload === "object") {
-        const record = payload as { node?: IRNode; new_id?: string };
-        const nextId = record.node?.id ?? record.new_id;
-
-        if (nextId) {
-          selectNode(nextId);
-        }
-      }
-
-      toast.success(successMessage);
-    } catch (error) {
-      console.error(error);
-      toast.error(error instanceof Error ? error.message : "IR update failed.");
-    } finally {
-      setIsMutating(false);
-    }
-  }
-
-  function openEdit(mode: Exclude<EditMode, null>) {
-    if (!selectedNode) {
-      return;
-    }
-
-    setEditMode(mode);
-    setDraftTitle(selectedNode.title);
-    setDraftContent(selectedNode.content ?? "");
-    setDraftRationale(selectedNode.rationale ?? "");
-  }
-
-  async function submitEditDialog() {
-    if (!selectedNode) {
-      return;
-    }
-
-    const title = draftTitle.trim();
-
-    if (!title) {
-      toast.error("Title is required.");
-      return;
-    }
-
-    if (editMode === "confirm") {
-      const assignment = getAssignmentPayload(selectedNode);
-
-      if (!assignment) {
-        return;
-      }
-
-      await runMutation(
-        () =>
-          postJSON<IRDetail>(`/api/ir/${selectedNode.id}/confirm`, {
-            ...assignment,
-            edits: {
-              title,
-              content: draftContent.trim() || null,
-              rationale: draftRationale.trim() || null,
-            },
-          }),
-        "Candidate confirmed."
-      );
-    }
-
-    if (editMode === "supersede") {
-      await runMutation(
-        () =>
-          postJSON<IRDetail>(`/api/ir/${selectedNode.id}/supersede`, {
-            title,
-            content: draftContent.trim() || null,
-            rationale: draftRationale.trim() || null,
-          }),
-        "Replacement candidate drafted."
-      );
-    }
-
-    setEditMode(null);
-  }
-
-  async function handleReclassify(node: IRNode) {
-    const [kind, subtype] = kindChoice.split(":") as [
-      IRKind,
-      string | undefined,
-    ];
-    await runMutation(
-      () =>
-        postJSON<{ node: IRNode; new_id: string }>(
-          `/api/ir/${node.id}/reclassify`,
-          {
-            kind,
-            subtype: subtype === "_" ? null : subtype,
-          }
-        ),
-      "Kind updated."
-    );
-  }
-
-  function handleBringToSandbox(node: IRNode) {
-    const success = bringDecisionToSandbox({
-      decisionId: node.id,
-      decisionTitle: node.title,
-      kind: getIRTypeLabel(node.kind, node.subtype),
-      content: node.content ?? node.title,
-      rationale: node.rationale,
-    });
-
-    if (success) {
-      toast.success("Loaded into sandbox.");
-    }
-  }
-
-  async function handleCreateNextStep(node: IRNode) {
-    if (!activeProjectId) {
-      return;
-    }
-
-    await runMutation(
-      () =>
-        postJSON<IRDetail>("/api/ir/draft", {
-          project_id: activeProjectId,
-          topic_id: node.topicId ?? activeTopicId,
-          kind: "plan",
-          subtype: "task",
-          title: `Next step for ${node.id}`,
-          content: `Define the next concrete step for: ${node.title}`,
-          rationale: "Drafted from the active IR detail pane.",
-          source_layer: "manual",
-          created_by: "user",
-          initial_status: "pending",
-          relations: [{ relation: "depends_on", to_node: node.id }],
-        }),
-      "Task candidate drafted."
-    );
-  }
-
-  function getAssignmentPayload(node: IRNode) {
-    if (node.topicId) {
-      return {};
-    }
-
-    const createTopicLabel = newTopicLabel.trim();
-
-    if (createTopicLabel) {
-      return { create_topic_label: createTopicLabel };
-    }
-
-    if (assignmentTopicId) {
-      return { assign_to_topic_id: assignmentTopicId };
-    }
-
-    toast.error("Choose a judgment topic before confirming.");
-    return null;
-  }
-
-  async function handleConfirmNode(node: IRNode) {
-    const assignment = getAssignmentPayload(node);
-
-    if (!assignment) {
-      return;
-    }
-
-    await runMutation(
-      () =>
-        postJSON<IRDetail>(`/api/ir/${node.id}/confirm`, {
-          ...assignment,
-        }),
-      "Candidate confirmed."
-    );
-    setNewTopicLabel("");
   }
 
   function handleDividerPointerDown(event: React.PointerEvent<HTMLElement>) {
@@ -937,8 +698,8 @@ export function IRPanel() {
                   <div className="flex gap-2">
                     <select
                       className="h-8 min-w-0 flex-1 rounded border border-[var(--ir-border-default)] bg-[var(--ir-bg-elevated)] px-2 text-xs"
-                      onChange={(event) => setKindChoice(event.target.value)}
-                      value={kindChoice}
+                      onChange={(event) => actions.setKindChoice(event.target.value)}
+                      value={actions.kindChoice}
                     >
                       <option value="plan:decision">plan / decision</option>
                       <option value="plan:task">plan / task</option>
@@ -952,8 +713,8 @@ export function IRPanel() {
                     </select>
                     <Button
                       className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
-                      disabled={isMutating}
-                      onClick={() => handleReclassify(selectedNode)}
+                      disabled={actions.isMutating}
+                      onClick={() => actions.handleReclassify(selectedNode)}
                       size="sm"
                       variant="outline"
                     >
@@ -969,7 +730,7 @@ export function IRPanel() {
                 <>
                   <Button
                     className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
-                    onClick={() => openEdit("supersede")}
+                    onClick={() => actions.openEdit("supersede")}
                     size="sm"
                     variant="outline"
                   >
@@ -978,8 +739,8 @@ export function IRPanel() {
                   </Button>
                   <Button
                     className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
-                    disabled={isMutating}
-                    onClick={() => handleCreateNextStep(selectedNode)}
+                    disabled={actions.isMutating}
+                    onClick={() => actions.handleCreateNextStep(selectedNode)}
                     size="sm"
                     variant="outline"
                   >
@@ -989,7 +750,7 @@ export function IRPanel() {
                   <Button
                     className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
                     onClick={() =>
-                      queueReferenceDraft(
+                      actions.queueReferenceDraft(
                         `> [${selectedNode.id}] ${selectedNode.title}\n> ${selectedNode.content ?? selectedNode.title}`
                       )
                     }
@@ -1001,7 +762,7 @@ export function IRPanel() {
                   </Button>
                   <Button
                     className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
-                    onClick={() => handleBringToSandbox(selectedNode)}
+                    onClick={() => actions.handleBringToSandbox(selectedNode)}
                     size="sm"
                     variant="outline"
                   >
@@ -1031,11 +792,11 @@ export function IRPanel() {
                       <select
                         className="h-8 rounded border border-[var(--ir-border-default)] bg-[var(--ir-bg-panel)] px-2 text-xs"
                         onChange={(event) =>
-                          setAssignmentTopicId(event.target.value)
+                          actions.setAssignmentTopicId(event.target.value)
                         }
-                        value={assignmentTopicId}
+                        value={actions.assignmentTopicId}
                       >
-                        {assignableTopics.map((topic) => (
+                        {actions.assignableTopics.map((topic) => (
                           <option key={topic.id} value={topic.id}>
                             {topic.label}
                           </option>
@@ -1044,17 +805,17 @@ export function IRPanel() {
                       <Input
                         className="h-8 rounded border-[var(--ir-border-default)] bg-[var(--ir-bg-panel)] text-xs focus-visible:ring-0"
                         onChange={(event) =>
-                          setNewTopicLabel(event.target.value)
+                          actions.setNewTopicLabel(event.target.value)
                         }
                         placeholder="Or create new judgment"
-                        value={newTopicLabel}
+                        value={actions.newTopicLabel}
                       />
                     </div>
                   )}
                   <Button
                     className="rounded border-[var(--ir-accent-blue-border)] bg-transparent text-[var(--ir-accent-blue)] hover:bg-[var(--ir-bg-hover)]"
-                    disabled={isMutating}
-                    onClick={() => handleConfirmNode(selectedNode)}
+                    disabled={actions.isMutating}
+                    onClick={() => actions.handleConfirmNode(selectedNode)}
                     size="sm"
                     variant="outline"
                   >
@@ -1063,7 +824,7 @@ export function IRPanel() {
                   </Button>
                   <Button
                     className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
-                    onClick={() => openEdit("confirm")}
+                    onClick={() => actions.openEdit("confirm")}
                     size="sm"
                     variant="outline"
                   >
@@ -1072,9 +833,9 @@ export function IRPanel() {
                   </Button>
                   <Button
                     className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
-                    disabled={isMutating}
+                    disabled={actions.isMutating}
                     onClick={() =>
-                      runMutation(
+                      actions.runMutation(
                         () => postJSON(`/api/ir/${selectedNode.id}/dismiss`),
                         "Candidate ignored."
                       )
@@ -1091,9 +852,9 @@ export function IRPanel() {
                 <>
                   <Button
                     className="rounded border-[var(--ir-accent-blue-border)] bg-transparent text-[var(--ir-accent-blue)] hover:bg-[var(--ir-bg-hover)]"
-                    disabled={isMutating}
+                    disabled={actions.isMutating}
                     onClick={() =>
-                      runMutation(
+                      actions.runMutation(
                         () => postJSON(`/api/ir/${selectedNode.id}/promote`),
                         "Idea promoted."
                       )
@@ -1106,9 +867,9 @@ export function IRPanel() {
                   </Button>
                   <Button
                     className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
-                    disabled={isMutating}
+                    disabled={actions.isMutating}
                     onClick={() =>
-                      runMutation(
+                      actions.runMutation(
                         () => postJSON(`/api/ir/${selectedNode.id}/dismiss`),
                         "Idea dismissed."
                       )
@@ -1120,7 +881,7 @@ export function IRPanel() {
                   </Button>
                   <Button
                     className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
-                    onClick={() => handleBringToSandbox(selectedNode)}
+                    onClick={() => actions.handleBringToSandbox(selectedNode)}
                     size="sm"
                     variant="outline"
                   >
@@ -1136,7 +897,7 @@ export function IRPanel() {
                   </Button>
                   <Button
                     className="rounded border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
-                    onClick={() => handleBringToSandbox(selectedNode)}
+                    onClick={() => actions.handleBringToSandbox(selectedNode)}
                     size="sm"
                     variant="outline"
                   >
@@ -1155,13 +916,13 @@ export function IRPanel() {
       </div>
 
       <Dialog
-        onOpenChange={(open) => !open && setEditMode(null)}
-        open={Boolean(editMode)}
+        onOpenChange={(open) => !open && actions.setEditMode(null)}
+        open={Boolean(actions.editMode)}
       >
         <DialogContent className="rounded-lg border border-[var(--ir-border-default)] bg-[var(--ir-bg-panel)]">
           <DialogHeader>
             <DialogTitle>
-              {editMode === "supersede"
+              {actions.editMode === "supersede"
                 ? "Draft replacement"
                 : "Edit and confirm"}
             </DialogTitle>
@@ -1169,31 +930,31 @@ export function IRPanel() {
           <div className="space-y-3">
             <Input
               className="rounded border-[var(--ir-border-default)] bg-[var(--ir-bg-elevated)] focus-visible:ring-0"
-              onChange={(event) => setDraftTitle(event.target.value)}
+              onChange={(event) => actions.setDraftTitle(event.target.value)}
               placeholder="Title"
-              value={draftTitle}
+              value={actions.draftTitle}
             />
             <Textarea
               className="min-h-28 rounded border-[var(--ir-border-default)] bg-[var(--ir-bg-elevated)] focus-visible:ring-0"
-              onChange={(event) => setDraftContent(event.target.value)}
+              onChange={(event) => actions.setDraftContent(event.target.value)}
               placeholder="Content"
-              value={draftContent}
+              value={actions.draftContent}
             />
             <Textarea
               className="min-h-20 rounded border-[var(--ir-border-default)] bg-[var(--ir-bg-elevated)] focus-visible:ring-0"
-              onChange={(event) => setDraftRationale(event.target.value)}
+              onChange={(event) => actions.setDraftRationale(event.target.value)}
               placeholder="Rationale"
-              value={draftRationale}
+              value={actions.draftRationale}
             />
           </div>
           <DialogFooter>
             <Button
               className="rounded border-[var(--ir-accent-blue-border)] bg-transparent text-[var(--ir-accent-blue)] hover:bg-[var(--ir-bg-hover)]"
-              disabled={isMutating}
-              onClick={submitEditDialog}
+              disabled={actions.isMutating}
+              onClick={actions.submitEditDialog}
               variant="outline"
             >
-              {editMode === "supersede" ? "Draft candidate" : "Confirm"}
+              {actions.editMode === "supersede" ? "Draft candidate" : "Confirm"}
             </Button>
           </DialogFooter>
         </DialogContent>

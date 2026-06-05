@@ -1,0 +1,294 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { useIR } from "@/components/ir/ir-provider";
+import { useWorkspace } from "@/components/workspace/workspace-provider";
+import type { IRDetail, IRKind, IRNode } from "@/lib/ir/types";
+import { getIRTypeLabel } from "@/lib/ir/types";
+
+export type EditMode = "confirm" | "supersede" | null;
+
+export async function postJSON<T>(
+  path: string,
+  body?: Record<string, unknown>
+) {
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}${path}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body ?? {}),
+    }
+  );
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.cause ?? payload?.message ?? "Request failed");
+  }
+
+  return (await response.json()) as T;
+}
+
+export function useIRActions(
+  selectedNode: IRNode | null,
+  mutateDetail: () => Promise<unknown>
+) {
+  const { refreshIR, selectNode } = useIR();
+  const {
+    activeProjectId,
+    activeTopicId,
+    bringDecisionToSandbox,
+    queueReferenceDraft,
+    topics,
+  } = useWorkspace();
+
+  const [editMode, setEditMode] = useState<EditMode>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftContent, setDraftContent] = useState("");
+  const [draftRationale, setDraftRationale] = useState("");
+  const [kindChoice, setKindChoice] = useState("plan:decision");
+  const [assignmentTopicId, setAssignmentTopicId] = useState("");
+  const [newTopicLabel, setNewTopicLabel] = useState("");
+  const [isMutating, setIsMutating] = useState(false);
+
+  const assignableTopics = useMemo(
+    () =>
+      topics.filter(
+        (topic) =>
+          !topic.isGeneral &&
+          !topic.archivedAt &&
+          topic.status !== "superseded" &&
+          topic.status !== "dismissed"
+      ),
+    [topics]
+  );
+
+  // Seed assignmentTopicId / newTopicLabel when an unassigned node is selected
+  useEffect(() => {
+    if (!selectedNode || selectedNode.topicId) {
+      return;
+    }
+
+    const preferred =
+      assignableTopics.find((topic) => topic.id === activeTopicId)?.id ??
+      assignableTopics[0]?.id ??
+      "";
+
+    setAssignmentTopicId(preferred);
+    setNewTopicLabel("");
+  }, [activeTopicId, assignableTopics, selectedNode]);
+
+  async function runMutation(
+    action: () => Promise<
+      { node?: IRNode; new_id?: string } | IRDetail | unknown
+    >,
+    successMessage: string
+  ) {
+    setIsMutating(true);
+
+    try {
+      const payload = await action();
+      await refreshIR();
+      await mutateDetail();
+
+      if (payload && typeof payload === "object") {
+        const record = payload as { node?: IRNode; new_id?: string };
+        const nextId = record.node?.id ?? record.new_id;
+
+        if (nextId) {
+          selectNode(nextId);
+        }
+      }
+
+      toast.success(successMessage);
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : "IR update failed.");
+    } finally {
+      setIsMutating(false);
+    }
+  }
+
+  function openEdit(mode: Exclude<EditMode, null>) {
+    if (!selectedNode) {
+      return;
+    }
+
+    setEditMode(mode);
+    setDraftTitle(selectedNode.title);
+    setDraftContent(selectedNode.content ?? "");
+    setDraftRationale(selectedNode.rationale ?? "");
+  }
+
+  function getAssignmentPayload(node: IRNode) {
+    if (node.topicId) {
+      return {};
+    }
+
+    const createTopicLabel = newTopicLabel.trim();
+
+    if (createTopicLabel) {
+      return { create_topic_label: createTopicLabel };
+    }
+
+    if (assignmentTopicId) {
+      return { assign_to_topic_id: assignmentTopicId };
+    }
+
+    toast.error("Choose a judgment topic before confirming.");
+    return null;
+  }
+
+  async function submitEditDialog() {
+    if (!selectedNode) {
+      return;
+    }
+
+    const title = draftTitle.trim();
+
+    if (!title) {
+      toast.error("Title is required.");
+      return;
+    }
+
+    if (editMode === "confirm") {
+      const assignment = getAssignmentPayload(selectedNode);
+
+      if (!assignment) {
+        return;
+      }
+
+      await runMutation(
+        () =>
+          postJSON<IRDetail>(`/api/ir/${selectedNode.id}/confirm`, {
+            ...assignment,
+            edits: {
+              title,
+              content: draftContent.trim() || null,
+              rationale: draftRationale.trim() || null,
+            },
+          }),
+        "Candidate confirmed."
+      );
+    }
+
+    if (editMode === "supersede") {
+      await runMutation(
+        () =>
+          postJSON<IRDetail>(`/api/ir/${selectedNode.id}/supersede`, {
+            title,
+            content: draftContent.trim() || null,
+            rationale: draftRationale.trim() || null,
+          }),
+        "Replacement candidate drafted."
+      );
+    }
+
+    setEditMode(null);
+  }
+
+  async function handleReclassify(node: IRNode) {
+    const [kind, subtype] = kindChoice.split(":") as [
+      IRKind,
+      string | undefined,
+    ];
+    await runMutation(
+      () =>
+        postJSON<{ node: IRNode; new_id: string }>(
+          `/api/ir/${node.id}/reclassify`,
+          {
+            kind,
+            subtype: subtype === "_" ? null : subtype,
+          }
+        ),
+      "Kind updated."
+    );
+  }
+
+  function handleBringToSandbox(node: IRNode) {
+    const success = bringDecisionToSandbox({
+      decisionId: node.id,
+      decisionTitle: node.title,
+      kind: getIRTypeLabel(node.kind, node.subtype),
+      content: node.content ?? node.title,
+      rationale: node.rationale,
+    });
+
+    if (success) {
+      toast.success("Loaded into sandbox.");
+    }
+  }
+
+  async function handleCreateNextStep(node: IRNode) {
+    if (!activeProjectId) {
+      return;
+    }
+
+    await runMutation(
+      () =>
+        postJSON<IRDetail>("/api/ir/draft", {
+          project_id: activeProjectId,
+          topic_id: node.topicId ?? activeTopicId,
+          kind: "plan",
+          subtype: "task",
+          title: `Next step for ${node.id}`,
+          content: `Define the next concrete step for: ${node.title}`,
+          rationale: "Drafted from the active IR detail pane.",
+          source_layer: "manual",
+          created_by: "user",
+          initial_status: "pending",
+          relations: [{ relation: "depends_on", to_node: node.id }],
+        }),
+      "Task candidate drafted."
+    );
+  }
+
+  async function handleConfirmNode(node: IRNode) {
+    const assignment = getAssignmentPayload(node);
+
+    if (!assignment) {
+      return;
+    }
+
+    await runMutation(
+      () =>
+        postJSON<IRDetail>(`/api/ir/${node.id}/confirm`, {
+          ...assignment,
+        }),
+      "Candidate confirmed."
+    );
+    setNewTopicLabel("");
+  }
+
+  return {
+    // state
+    editMode,
+    setEditMode,
+    draftTitle,
+    setDraftTitle,
+    draftContent,
+    setDraftContent,
+    draftRationale,
+    setDraftRationale,
+    kindChoice,
+    setKindChoice,
+    assignmentTopicId,
+    setAssignmentTopicId,
+    newTopicLabel,
+    setNewTopicLabel,
+    isMutating,
+    // derived
+    assignableTopics,
+    // handlers
+    runMutation,
+    openEdit,
+    submitEditDialog,
+    handleReclassify,
+    handleBringToSandbox,
+    handleCreateNextStep,
+    handleConfirmNode,
+    // also expose queueReferenceDraft so ir-panel can use it via actions
+    queueReferenceDraft,
+  };
+}
