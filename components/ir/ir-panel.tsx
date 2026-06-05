@@ -547,7 +547,6 @@ export function IRPanel() {
       <IRDetailPane
         actions={actions}
         detail={detail}
-        onClose={() => selectNode(null)}
         selectedNode={selectedNode}
       />
     </div>

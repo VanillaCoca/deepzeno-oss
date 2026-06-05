@@ -23,7 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useWorkspace } from "@/components/workspace/workspace-provider";
-import type { IRDetail, IREdge, IRNode } from "@/lib/ir/types";
+import type { IRDetail, IRNode } from "@/lib/ir/types";
 import { getIRTypeLabel } from "@/lib/ir/types";
 
 export function StatusBadge({ status }: { status: IRNode["status"] }) {
@@ -91,17 +91,19 @@ function DetailRelationList({
 }
 
 export type IRDetailPaneProps = {
-  selectedNode: IRNode | null;
-  detail: IRDetail | undefined;
   actions: ReturnType<typeof useIRActions>;
-  onClose: () => void;
+  detail: IRDetail | undefined;
+  selectedNode: IRNode | null;
 };
 
+/**
+ * Must be rendered inside both `IRProvider` and `WorkspaceProvider` —
+ * it reads `selectNode` and `queueReferenceDraft` directly from those contexts.
+ */
 export function IRDetailPane({
-  selectedNode,
-  detail,
   actions,
-  onClose,
+  detail,
+  selectedNode,
 }: IRDetailPaneProps) {
   const { selectNode } = useIR();
   const { queueReferenceDraft } = useWorkspace();
@@ -132,7 +134,7 @@ export function IRDetailPane({
               </div>
               <Button
                 className="rounded border border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
-                onClick={onClose}
+                onClick={() => selectNode(null)}
                 size="icon-sm"
                 variant="outline"
               >
@@ -262,7 +264,7 @@ export function IRDetailPane({
               {selectedNode.status === "pending" ? (
                 <>
                   {detail?.edges.some(
-                    (edge: IREdge) =>
+                    (edge) =>
                       edge.fromNode === selectedNode.id &&
                       edge.relation === "supersedes"
                   ) ? (
