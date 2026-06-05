@@ -50,8 +50,6 @@ type WorkspaceContextValue = {
   currentConversationId: string | null;
   activeTopic: WorkspaceTopic | null;
   isArchivedTopicReadonly: boolean;
-  selectedDecisionId: string | null;
-  setSelectedDecisionId: (decisionId: string | null) => void;
   pendingCandidateCounts: PendingCandidateCounts;
   selectProject: (projectId: string) => Promise<void>;
   selectTopic: (topicId: string) => Promise<void>;
@@ -168,9 +166,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const selectionRef = useRef<WorkspaceSelectionParams>(locationSelection);
   const [selection, setSelection] =
     useState<WorkspaceSelectionParams>(locationSelection);
-  const [selectedDecisionId, setSelectedDecisionId] = useState<string | null>(
-    null
-  );
   const [referenceDraft, setReferenceDraft] = useState<DraftInsertion | null>(
     null
   );
@@ -213,7 +208,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     selectionRef.current = locationSelection;
     setSelection(locationSelection);
-    setSelectedDecisionId(null);
   }, [locationSelection]);
 
   useEffect(() => {
@@ -298,7 +292,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   async function selectProject(projectId: string) {
     await refreshWorkspace({ projectId, topicId: null, conversationId: null });
-    setSelectedDecisionId(null);
   }
 
   async function selectTopic(topicId: string) {
@@ -307,7 +300,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       topicId,
       conversationId: null,
     });
-    setSelectedDecisionId(null);
   }
 
   function selectConversation(conversationId: string) {
@@ -323,7 +315,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       topicId: activeTopicId,
       conversationId,
     }));
-    setSelectedDecisionId(null);
   }
 
   async function createProject(name: string) {
@@ -520,8 +511,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     currentConversationId,
     activeTopic,
     isArchivedTopicReadonly: workspace?.isArchivedTopicReadonly ?? false,
-    selectedDecisionId,
-    setSelectedDecisionId,
     pendingCandidateCounts,
     selectProject,
     selectTopic,
