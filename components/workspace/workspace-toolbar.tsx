@@ -7,24 +7,28 @@ import { cn } from "@/lib/utils";
 export type WorkspaceView = "conversation" | "truth-graph";
 
 export function WorkspaceToolbar({
-  candidateCount,
   ideaCount,
+  candidateCount,
   onOpenDrawer,
   onViewChange,
   view,
 }: {
-  candidateCount: number;
   ideaCount: number;
+  candidateCount: number;
   onOpenDrawer: () => void;
   onViewChange: (view: WorkspaceView) => void;
   view: WorkspaceView;
 }) {
   return (
     <div className="flex items-center justify-between gap-2 border-b border-[var(--ir-border-default)] px-4 py-2">
-      <div className="flex rounded-lg border border-[var(--ir-border-default)] bg-[var(--ir-bg-elevated)] p-0.5">
+      <div
+        aria-label="Workspace view"
+        className="flex rounded-lg border border-[var(--ir-border-default)] bg-[var(--ir-bg-elevated)] p-0.5"
+        role="radiogroup"
+      >
         {(["conversation", "truth-graph"] as const).map((value) => (
           <Button
-            aria-pressed={view === value}
+            aria-checked={view === value}
             className={cn(
               "h-7 rounded-md px-2 text-xs",
               view === value
@@ -33,6 +37,7 @@ export function WorkspaceToolbar({
             )}
             key={value}
             onClick={() => onViewChange(value)}
+            role="radio"
             size="xs"
             variant="ghost"
           >
