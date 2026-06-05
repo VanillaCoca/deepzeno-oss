@@ -558,139 +558,18 @@ export function TruthGraph({
           <span>Overview</span>
           <span className="normal-case">{nodes.length} truths</span>
         </div>
-        <div className="overflow-auto">
-          <svg
-            aria-label="Truth graph overview grouped by topic"
-            role="img"
-            viewBox={`0 0 ${overviewWidth} ${overviewHeight}`}
-            width="100%"
-          >
-            <defs>
-              <marker
-                id="z-truth-overview-arrow"
-                markerHeight="7"
-                markerWidth="7"
-                orient="auto-start-reverse"
-                refX="8"
-                refY="5"
-                viewBox="0 0 10 10"
-              >
-                <path
-                  d="M2 1L8 5L2 9"
-                  fill="none"
-                  stroke="var(--z-confirmed)"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="var(--z-line-w-strong)"
-                />
-              </marker>
-            </defs>
-            {model.topicGroups.map((group) => {
-              const box = overviewBoxes.get(topicLayoutId(group.topic.id));
-
-              if (!box) {
-                return null;
-              }
-
-              return (
-                <g key={group.topic.id ?? "unassigned"}>
-                  <rect
-                    fill="none"
-                    height={box.height}
-                    rx="var(--z-node-radius-target)"
-                    stroke="var(--z-topic-border)"
-                    strokeWidth="var(--z-stroke-w-fact)"
-                    width={box.width}
-                    x={box.x}
-                    y={box.y}
-                  />
-                  <text
-                    fill="var(--z-text-2)"
-                    fontFamily="var(--z-font-sans)"
-                    fontSize="var(--z-font-topic)"
-                    fontWeight="600"
-                    x={box.x + 12}
-                    y={box.y + 18}
-                  >
-                    {truncateIRTitle(group.topic.label, 28)}
-                  </text>
-                </g>
-              );
-            })}
-            {activeSelectedNodeId
-              ? selectedChainEdges.map((edge) => {
-                  const parentBox = overviewBoxes.get(edge.parentId);
-                  const childBox = overviewBoxes.get(edge.childId);
-
-                  if (!(parentBox && childBox)) {
-                    return null;
-                  }
-
-                  return (
-                    <path
-                      d={elbowPath(parentBox, childBox)}
-                      fill="none"
-                      key={edge.id}
-                      markerEnd="url(#z-truth-overview-arrow)"
-                      opacity="var(--z-focus-related)"
-                      stroke="var(--z-confirmed)"
-                      strokeLinejoin="round"
-                      strokeWidth="var(--z-line-w-strong)"
-                    />
-                  );
-                })
-              : null}
-            {nodes.map((node) => {
-              const box = overviewBoxes.get(node.id);
-
-              if (!box) {
-                return null;
-              }
-
-              const isSelected = activeSelectedNodeId === node.id;
-              const isOnChain = chainNodeIds.has(node.id);
-
-              return (
-                <GraphNode
-                  box={box}
-                  hasSelection={Boolean(activeSelectedNodeId)}
-                  isOnChain={isOnChain}
-                  isRoot={false}
-                  isSelected={isSelected}
-                  key={node.id}
-                  node={node}
-                  onSelect={onSelect}
-                />
-              );
-            })}
-          </svg>
-        </div>
-      </section>
-
-      <section
-        className={cn(
-          "min-w-0 bg-[var(--z-node-fill)]",
-          !activeSelectedNodeId && "flex flex-col"
-        )}
-        data-testid="truth-graph-chain"
-      >
-        <div className="flex items-center justify-between gap-2 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-[var(--z-text-3)]">
-          <span>Chain</span>
-          {activeSelectedNodeId ? (
-            <span className="normal-case">{chainNodeIds.size} steps</span>
-          ) : null}
-        </div>
-        {activeSelectedNodeId && layout.chain ? (
-          <div className="overflow-auto">
+        <div className="flex justify-center overflow-auto">
+          <div className="min-w-max">
             <svg
-              aria-label="Selected truth upstream chain"
+              aria-label="Truth graph overview grouped by topic"
+              height={overviewHeight}
               role="img"
-              viewBox={`0 0 ${chainWidth} ${chainHeight}`}
-              width="100%"
+              viewBox={`0 0 ${overviewWidth} ${overviewHeight}`}
+              width={overviewWidth}
             >
               <defs>
                 <marker
-                  id="z-truth-chain-arrow"
+                  id="z-truth-overview-arrow"
                   markerHeight="7"
                   markerWidth="7"
                   orient="auto-start-reverse"
@@ -708,59 +587,186 @@ export function TruthGraph({
                   />
                 </marker>
               </defs>
-              {layout.chain.edges?.map((edge) => {
-                const path = chainEdgePath(edge);
-                const labelPoint = chainEdgeLabelPoint(edge);
+              {model.topicGroups.map((group) => {
+                const box = overviewBoxes.get(topicLayoutId(group.topic.id));
 
-                return path ? (
-                  <g key={edge.id}>
-                    <path
-                      d={path}
-                      fill="none"
-                      markerEnd="url(#z-truth-chain-arrow)"
-                      stroke="var(--z-confirmed)"
-                      strokeLinejoin="round"
-                      strokeWidth="var(--z-line-w-strong)"
-                    />
-                    {labelPoint ? (
-                      <text
-                        dominantBaseline="central"
-                        fill="var(--z-edge-label)"
-                        fontFamily="var(--z-font-sans)"
-                        fontSize="var(--z-font-edge)"
-                        fontWeight="500"
-                        textAnchor="middle"
-                        x={labelPoint.x}
-                        y={labelPoint.y}
-                      >
-                        {CHAIN_EDGE_LABEL}
-                      </text>
-                    ) : null}
-                  </g>
-                ) : null;
-              })}
-              {[...chainNodeIds].map((nodeId) => {
-                const node = model.nodeById.get(nodeId);
-                const box = chainBoxes.get(nodeId);
-
-                if (!(node && box)) {
+                if (!box) {
                   return null;
                 }
 
                 return (
+                  <g key={group.topic.id ?? "unassigned"}>
+                    <rect
+                      fill="none"
+                      height={box.height}
+                      rx="var(--z-node-radius-target)"
+                      stroke="var(--z-topic-border)"
+                      strokeWidth="var(--z-stroke-w-fact)"
+                      width={box.width}
+                      x={box.x}
+                      y={box.y}
+                    />
+                    <text
+                      fill="var(--z-text-2)"
+                      fontFamily="var(--z-font-sans)"
+                      fontSize="var(--z-font-topic)"
+                      fontWeight="600"
+                      x={box.x + 12}
+                      y={box.y + 18}
+                    >
+                      {truncateIRTitle(group.topic.label, 28)}
+                    </text>
+                  </g>
+                );
+              })}
+              {activeSelectedNodeId
+                ? selectedChainEdges.map((edge) => {
+                    const parentBox = overviewBoxes.get(edge.parentId);
+                    const childBox = overviewBoxes.get(edge.childId);
+
+                    if (!(parentBox && childBox)) {
+                      return null;
+                    }
+
+                    return (
+                      <path
+                        d={elbowPath(parentBox, childBox)}
+                        fill="none"
+                        key={edge.id}
+                        markerEnd="url(#z-truth-overview-arrow)"
+                        opacity="var(--z-focus-related)"
+                        stroke="var(--z-confirmed)"
+                        strokeLinejoin="round"
+                        strokeWidth="var(--z-line-w-strong)"
+                      />
+                    );
+                  })
+                : null}
+              {nodes.map((node) => {
+                const box = overviewBoxes.get(node.id);
+
+                if (!box) {
+                  return null;
+                }
+
+                const isSelected = activeSelectedNodeId === node.id;
+                const isOnChain = chainNodeIds.has(node.id);
+
+                return (
                   <GraphNode
                     box={box}
-                    hasSelection={true}
-                    isOnChain={true}
-                    isRoot={chainRootIds.has(nodeId)}
-                    isSelected={activeSelectedNodeId === nodeId}
-                    key={nodeId}
+                    hasSelection={Boolean(activeSelectedNodeId)}
+                    isOnChain={isOnChain}
+                    isRoot={false}
+                    isSelected={isSelected}
+                    key={node.id}
                     node={node}
                     onSelect={onSelect}
                   />
                 );
               })}
             </svg>
+          </div>
+        </div>
+      </section>
+
+      <section
+        className={cn(
+          "min-w-0 bg-[var(--z-node-fill)]",
+          !activeSelectedNodeId && "flex flex-col"
+        )}
+        data-testid="truth-graph-chain"
+      >
+        <div className="flex items-center justify-between gap-2 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-[var(--z-text-3)]">
+          <span>Chain</span>
+          {activeSelectedNodeId ? (
+            <span className="normal-case">{chainNodeIds.size} steps</span>
+          ) : null}
+        </div>
+        {activeSelectedNodeId && layout.chain ? (
+          <div className="flex justify-center overflow-auto">
+            <div className="min-w-max">
+              <svg
+                aria-label="Selected truth upstream chain"
+                height={chainHeight}
+                role="img"
+                viewBox={`0 0 ${chainWidth} ${chainHeight}`}
+                width={chainWidth}
+              >
+                <defs>
+                  <marker
+                    id="z-truth-chain-arrow"
+                    markerHeight="7"
+                    markerWidth="7"
+                    orient="auto-start-reverse"
+                    refX="8"
+                    refY="5"
+                    viewBox="0 0 10 10"
+                  >
+                    <path
+                      d="M2 1L8 5L2 9"
+                      fill="none"
+                      stroke="var(--z-confirmed)"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="var(--z-line-w-strong)"
+                    />
+                  </marker>
+                </defs>
+                {layout.chain.edges?.map((edge) => {
+                  const path = chainEdgePath(edge);
+                  const labelPoint = chainEdgeLabelPoint(edge);
+
+                  return path ? (
+                    <g key={edge.id}>
+                      <path
+                        d={path}
+                        fill="none"
+                        markerEnd="url(#z-truth-chain-arrow)"
+                        stroke="var(--z-confirmed)"
+                        strokeLinejoin="round"
+                        strokeWidth="var(--z-line-w-strong)"
+                      />
+                      {labelPoint ? (
+                        <text
+                          dominantBaseline="central"
+                          fill="var(--z-edge-label)"
+                          fontFamily="var(--z-font-sans)"
+                          fontSize="var(--z-font-edge)"
+                          fontWeight="500"
+                          textAnchor="middle"
+                          x={labelPoint.x}
+                          y={labelPoint.y}
+                        >
+                          {CHAIN_EDGE_LABEL}
+                        </text>
+                      ) : null}
+                    </g>
+                  ) : null;
+                })}
+                {[...chainNodeIds].map((nodeId) => {
+                  const node = model.nodeById.get(nodeId);
+                  const box = chainBoxes.get(nodeId);
+
+                  if (!(node && box)) {
+                    return null;
+                  }
+
+                  return (
+                    <GraphNode
+                      box={box}
+                      hasSelection={true}
+                      isOnChain={true}
+                      isRoot={chainRootIds.has(nodeId)}
+                      isSelected={activeSelectedNodeId === nodeId}
+                      key={nodeId}
+                      node={node}
+                      onSelect={onSelect}
+                    />
+                  );
+                })}
+              </svg>
+            </div>
           </div>
         ) : (
           <div className="flex flex-1 items-center px-4 py-8 text-sm leading-[1.6] text-[var(--z-text-3)]">
