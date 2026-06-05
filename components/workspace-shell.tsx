@@ -4,11 +4,32 @@ import { PanelRightCloseIcon, PanelRightOpenIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { IRPanel } from "@/components/ir/ir-panel";
-import { IRProvider } from "@/components/ir/ir-provider";
+import { IRProvider, useIR } from "@/components/ir/ir-provider";
 import { Button } from "@/components/ui/button";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import {
+  WorkspaceToolbar,
+  type WorkspaceView,
+} from "@/components/workspace/workspace-toolbar";
 import { cn } from "@/lib/utils";
 import { ProjectSidebar } from "./project-sidebar";
+
+function ViewToolbar(props: {
+  onOpenDrawer: () => void;
+  onViewChange: (view: WorkspaceView) => void;
+  view: WorkspaceView;
+}) {
+  const { candidates, ideas } = useIR();
+  return (
+    <WorkspaceToolbar
+      candidateCount={candidates.length}
+      ideaCount={ideas.length}
+      onOpenDrawer={props.onOpenDrawer}
+      onViewChange={props.onViewChange}
+      view={props.view}
+    />
+  );
+}
 
 const DEFAULT_RIGHT_PANEL_WIDTH = 540;
 const MIN_RIGHT_PANEL_WIDTH = 440;
@@ -38,6 +59,12 @@ export function WorkspaceShell({
     "right-panel-width",
     DEFAULT_RIGHT_PANEL_WIDTH
   );
+  const [view, setView] = useLocalStorage<WorkspaceView>(
+    "workspace-view",
+    "conversation"
+  );
+  // consumed by the IR drawer in the next task
+  const [_drawerOpen, setDrawerOpen] = useState(false);
   const [hasMounted, setHasMounted] = useState(false);
 
   useEffect(() => {
@@ -89,7 +116,25 @@ export function WorkspaceShell({
       <SidebarInset className="min-h-dvh bg-sidebar">
         <IRProvider>
           <div className="relative flex h-dvh min-w-0">
-            <div className="min-w-0 flex-1">{children}</div>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <ViewToolbar
+                onOpenDrawer={() => setDrawerOpen(true)}
+                onViewChange={setView}
+                view={view}
+              />
+              <div className="min-h-0 flex-1 overflow-hidden">
+                {view === "truth-graph" ? (
+                  <div
+                    className="flex h-full items-center justify-center text-sm text-[var(--ir-text-tertiary)]"
+                    data-testid="truth-graph-stage-placeholder"
+                  >
+                    Truth Graph stage
+                  </div>
+                ) : (
+                  children
+                )}
+              </div>
+            </div>
 
             <aside
               className={cn(
