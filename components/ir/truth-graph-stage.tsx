@@ -15,6 +15,8 @@ export function TruthGraphStage() {
     useIR();
   const { topics, activeProjectId } = useWorkspace();
   const [graphMode, setGraphMode] = useState<TruthGraphMode>("truth");
+  // null = top level; otherwise we've drilled into a parent's sub-nodes.
+  const [focusParentId, setFocusParentId] = useState<string | null>(null);
 
   const { data: detail, mutate: mutateDetail } = useSWR<IRDetail>(
     irNodeKey(selectedNodeId),
@@ -31,9 +33,9 @@ export function TruthGraphStage() {
     fetcher
   );
 
-  // "Truth" shows confirmed truths only; "All" overlays candidates + ideas so
-  // the idea → candidate → truth pipeline is visible in one graph.
-  const graphNodes = useMemo<IRNode[]>(() => {
+  // Full node set for the current scope, before drill filtering. "Truth" shows
+  // confirmed truths only; "All" overlays candidates + ideas.
+  const baseNodes = useMemo<IRNode[]>(() => {
     if (graphMode !== "all") {
       return truth;
     }
@@ -48,35 +50,61 @@ export function TruthGraphStage() {
     });
   }, [graphMode, truth, candidates, ideas]);
 
-  const graphEdges = useMemo<IREdge[]>(() => {
-    if (graphMode !== "all") {
-      return truthEdges;
+  // How many children each node has within the current scope (for the count chip).
+  const childCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const node of baseNodes) {
+      if (node.parentId) {
+        counts.set(node.parentId, (counts.get(node.parentId) ?? 0) + 1);
+      }
     }
+    return counts;
+  }, [baseNodes]);
 
+  // Top level shows roots (no parent); drilling shows one parent's children.
+  const graphNodes = useMemo(
+    () => baseNodes.filter((node) => (node.parentId ?? null) === focusParentId),
+    [baseNodes, focusParentId]
+  );
+
+  const graphEdges = useMemo<IREdge[]>(() => {
     const ids = new Set(graphNodes.map((node) => node.id));
-    return (allEdgesData?.edges ?? []).filter(
+    const base = graphMode === "all" ? (allEdgesData?.edges ?? []) : truthEdges;
+    return base.filter(
       (edge) => ids.has(edge.fromNode) && ids.has(edge.toNode)
     );
   }, [graphMode, truthEdges, allEdgesData, graphNodes]);
 
-  // The detail/action pane works for whatever node is selected in the graph —
-  // in "All" mode that includes candidates/ideas, enabling inline promote/confirm.
+  // The detail/action pane works for whatever node is selected (found in the
+  // full set, so it stays open even when drilled), enabling inline promote/confirm.
   const selectedNode =
-    graphNodes.find((node) => node.id === selectedNodeId) ?? null;
+    baseNodes.find((node) => node.id === selectedNodeId) ?? null;
+  const focusParent = focusParentId
+    ? (baseNodes.find((node) => node.id === focusParentId) ?? null)
+    : null;
   const actions = useIRActions(selectedNode, mutateDetail);
   const truthGraphTopics = useMemo(
     () => topics.map((topic) => ({ id: topic.id, label: topic.label })),
     [topics]
   );
 
+  // Switching scope can invalidate the drilled parent — return to top level.
+  function handleModeChange(mode: TruthGraphMode) {
+    setGraphMode(mode);
+    setFocusParentId(null);
+  }
+
   return (
     <div className="flex h-full flex-col pt-16" data-testid="truth-graph-stage">
       <div className="min-h-0 flex-1 overflow-auto">
         <TruthGraph
+          childCounts={childCounts}
           edges={graphEdges}
+          focusParentTitle={focusParent?.title ?? null}
           mode={graphMode}
           nodes={graphNodes}
-          onModeChange={setGraphMode}
+          onDrill={setFocusParentId}
+          onModeChange={handleModeChange}
           onSelect={selectNode}
           selectedNodeId={selectedNodeId}
           topics={truthGraphTopics}

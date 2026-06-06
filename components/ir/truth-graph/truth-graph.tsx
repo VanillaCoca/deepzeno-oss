@@ -63,9 +63,12 @@ type LayoutState = {
 export type TruthGraphMode = "truth" | "all";
 
 export type TruthGraphProps = {
+  childCounts: Map<string, number>;
   edges: TruthGraphFlowEdge["edge"][];
+  focusParentTitle: string | null;
   mode: TruthGraphMode;
   nodes: IRNode[];
+  onDrill: (parentId: string | null) => void;
   onModeChange: (mode: TruthGraphMode) => void;
   onSelect: (nodeId: string) => void;
   selectedNodeId: string | null;
@@ -253,8 +256,8 @@ function chainEdgePath(edge: ElkEdge) {
 
   // Pull the final point back by EDGE_GAP so the solid arrowhead sits in the
   // gap just below the source / above the target, never overshooting into it.
-  const last = points[points.length - 1];
-  const prev = points[points.length - 2];
+  const last = points.at(-1);
+  const prev = points.at(-2);
   if (last && prev) {
     const dx = last.x - prev.x;
     const dy = last.y - prev.y;
@@ -369,19 +372,23 @@ function nodeTone({
 
 function GraphNode({
   box,
+  childCount = 0,
   hasSelection,
   isOnChain,
   isRoot,
   isSelected,
   node,
+  onDrill,
   onSelect,
 }: {
   box: NodeBox;
+  childCount?: number;
   hasSelection: boolean;
   isOnChain: boolean;
   isRoot: boolean;
   isSelected: boolean;
   node: IRNode;
+  onDrill?: (parentId: string) => void;
   onSelect: (nodeId: string) => void;
 }) {
   const tone = nodeTone({ isOnChain, isSelected, node });
@@ -480,6 +487,46 @@ function GraphNode({
           {anchorLabel}
         </text>
       ) : null}
+      {childCount > 0 && onDrill ? (
+        // biome-ignore lint/a11y/useSemanticElements: SVG must stay in SVG space.
+        <g
+          aria-label={`Open ${childCount} sub-node${childCount === 1 ? "" : "s"}`}
+          className="cursor-pointer outline-none"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDrill(node.id);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              event.stopPropagation();
+              onDrill(node.id);
+            }
+          }}
+          role="button"
+          tabIndex={0}
+        >
+          <rect
+            fill="var(--z-node-fill-sel)"
+            height="16"
+            rx="8"
+            width="34"
+            x={box.x + box.width - 40}
+            y={box.y + 6}
+          />
+          <text
+            dominantBaseline="central"
+            fill="var(--z-text-2)"
+            fontFamily="var(--z-font-sans)"
+            fontSize="var(--z-font-anchor)"
+            textAnchor="middle"
+            x={box.x + box.width - 23}
+            y={box.y + 14}
+          >
+            {`⌄ ${childCount}`}
+          </text>
+        </g>
+      ) : null}
     </g>
   );
 }
@@ -535,9 +582,12 @@ function CompactTruthList({
 }
 
 export function TruthGraph({
+  childCounts,
   edges,
+  focusParentTitle,
   mode,
   nodes,
+  onDrill,
   onModeChange,
   onSelect,
   selectedNodeId,
@@ -654,7 +704,21 @@ export function TruthGraph({
         data-testid="truth-graph-overview"
       >
         <div className="flex items-center justify-between gap-2 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-[var(--z-text-3)]">
-          <span>Overview</span>
+          {focusParentTitle ? (
+            <button
+              className="flex items-center gap-1 normal-case text-[var(--z-text-2)] hover:text-[var(--z-text)]"
+              onClick={() => onDrill(null)}
+              type="button"
+            >
+              <span aria-hidden="true">←</span>
+              <span className="text-[var(--z-text-3)]">Overview /</span>
+              <span className="max-w-[180px] truncate font-medium">
+                {truncateIRTitle(focusParentTitle, 32)}
+              </span>
+            </button>
+          ) : (
+            <span>Overview</span>
+          )}
           <div className="flex items-center gap-2">
             <div className="flex items-center rounded-md border border-[var(--z-topic-border)] p-0.5 normal-case">
               {(["truth", "all"] as const).map((scope) => (
@@ -789,12 +853,14 @@ export function TruthGraph({
                 return (
                   <GraphNode
                     box={box}
+                    childCount={childCounts.get(node.id) ?? 0}
                     hasSelection={Boolean(activeSelectedNodeId)}
                     isOnChain={isOnChain}
                     isRoot={false}
                     isSelected={isSelected}
                     key={node.id}
                     node={node}
+                    onDrill={onDrill}
                     onSelect={onSelect}
                   />
                 );
