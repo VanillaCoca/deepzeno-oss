@@ -449,27 +449,54 @@ const BADGE_TONE: Record<DemoStatus, string> = {
   idea: "bg-[var(--ir-bg-elevated)] text-[var(--ir-text-secondary)]",
 };
 
-function ActionsPanel({ status }: { status: DemoStatus }) {
+function ActionsBody({ status }: { status: DemoStatus }) {
   const specs = ACTION_SETS[status];
   return (
-    <div className="flex h-full min-h-0 flex-col px-5 pt-2 pb-5">
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="text-[15px] font-semibold leading-tight text-[var(--ir-text-primary)]">
-          Next step for C11
-        </h3>
+    <div className="flex h-full min-h-0 flex-col px-5 py-4">
+      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[var(--ir-text-tertiary)]">
+        Actions
+      </p>
+      <div className="divide-y divide-[var(--ir-border-default)]">
+        {specs.map((spec) => (
+          <ActionItem key={spec.label} spec={spec} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// 情况4: Details + Actions live inside ONE card under a shared header (node
+// title + status), so the actions visibly belong to the node. The body keeps
+// the same column split as the graph above so the divider still lines up.
+function BottomCard({ status }: { status: DemoStatus }) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--ir-border-default)] px-5 py-3">
+        <div className="min-w-0">
+          <p className="text-xs text-[var(--ir-text-secondary)]">Task</p>
+          <h3 className="mt-0.5 truncate text-[15px] font-semibold text-[var(--ir-text-primary)]">
+            Next step for C11
+          </h3>
+        </div>
         <span
           className={cn(
-            "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium",
+            "mt-0.5 shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium",
             BADGE_TONE[status]
           )}
         >
           {STATUS_LABEL[status]}
         </span>
       </div>
-      <div className="mt-2 divide-y divide-[var(--ir-border-default)]">
-        {specs.map((spec) => (
-          <ActionItem key={spec.label} spec={spec} />
-        ))}
+      <div
+        className="grid min-h-0 flex-1"
+        style={{ gridTemplateColumns: COLUMN_SPLIT }}
+      >
+        <div className="min-h-0 overflow-hidden border-r border-[var(--ir-border-default)]">
+          <DetailsBody />
+        </div>
+        <div className="min-h-0 overflow-hidden">
+          <ActionsBody status={status} />
+        </div>
       </div>
     </div>
   );
@@ -479,17 +506,10 @@ function ActionsPanel({ status }: { status: DemoStatus }) {
 /*  Details quadrant                                                          */
 /* -------------------------------------------------------------------------- */
 
-function DetailsPanel() {
+function DetailsBody() {
   return (
-    <div className="h-full min-h-0 overflow-y-auto px-4 pb-4">
-      <div className="border-b border-[var(--ir-border-default)] pb-3 pt-1">
-        <p className="text-xs text-[var(--ir-text-secondary)]">Task</p>
-        <h2 className="mt-1 text-base font-medium text-[var(--ir-text-primary)]">
-          Next step for C11
-        </h2>
-      </div>
-
-      <section className="mt-3 space-y-1.5">
+    <div className="h-full min-h-0 overflow-y-auto px-5 py-4">
+      <section className="space-y-1.5">
         <p className="text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--ir-text-tertiary)]">
           Rationale
         </p>
@@ -697,20 +717,12 @@ export default function TruthPanelDemoPage() {
               </div>
             </section>
 
-            {/* Details (bottom-left) */}
-            <section className="flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-[var(--ir-border-default)] bg-[var(--ir-bg-panel)]">
-              <SectionHeader label="Details" />
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <DetailsPanel />
-              </div>
-            </section>
-
-            {/* Actions (bottom-right) */}
-            <section className="flex min-h-0 min-w-0 flex-col overflow-hidden border-l border-t border-[var(--ir-border-default)] bg-[var(--ir-bg-panel)]">
-              <SectionHeader label="Actions" />
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <ActionsPanel status={status} />
-              </div>
+            {/* Details + Actions = one shared-header card spanning both columns */}
+            <section
+              className="min-h-0 min-w-0 overflow-hidden border-t border-[var(--ir-border-default)] bg-[var(--ir-bg-panel)]"
+              style={{ gridColumn: "1 / -1" }}
+            >
+              <BottomCard status={status} />
             </section>
           </div>
         </div>
