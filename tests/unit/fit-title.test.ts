@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { fitTitleToWidth, wrapTitleToLines } from "../../lib/ir/fit-title.ts";
+import {
+  fitNodeTitle,
+  fitTitleToWidth,
+  wrapTitleToLines,
+} from "../../lib/ir/fit-title.ts";
 
 const PADDING_PX = 16;
 
@@ -112,5 +116,42 @@ describe("wrapTitleToLines", () => {
     );
     const without = wrapTitleToLines("一二三四五六七八九十", 168, 13);
     assert.ok(measureWidth(withReserve[0], 13) <= measureWidth(without[0], 13));
+  });
+});
+
+describe("fitNodeTitle", () => {
+  const base = {
+    width: 168,
+    baseFont: 13,
+    padY: 9,
+    maxLines: 4,
+    shrinkFont: 11.5,
+  };
+
+  it("computes height for a single short line", () => {
+    const r = fitNodeTitle({ title: "先转 TD", ...base });
+    assert.equal(r.lines.length, 1);
+    assert.equal(r.fontPx, 13);
+    assert.equal(r.height, base.padY * 2 + r.lineHeight);
+  });
+
+  it("grows height with line count", () => {
+    const r = fitNodeTitle({
+      title: "结构化存储项目判断在AI对话之间无缝衔接保持上下文",
+      ...base,
+    });
+    assert.ok(r.lines.length >= 2);
+    assert.equal(r.height, base.padY * 2 + r.lines.length * r.lineHeight);
+  });
+
+  it("shrinks font when wrapping would exceed maxLines", () => {
+    const long = "一二三四五六七八九十".repeat(8);
+    const r = fitNodeTitle({ title: long, ...base });
+    assert.equal(r.fontPx, base.shrinkFont);
+  });
+
+  it("returns raw title lines without indicator prefix/suffix", () => {
+    const r = fitNodeTitle({ title: "先转 TD", ...base, reserveText: "✓  ?" });
+    assert.ok(!r.lines[0].startsWith("✓"));
   });
 });

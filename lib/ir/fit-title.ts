@@ -82,6 +82,46 @@ export function wrapTitleToLines(
   return lines;
 }
 
+export type NodeTitleLayout = {
+  lines: string[];
+  fontPx: number;
+  lineHeight: number;
+  height: number;
+};
+
+/**
+ * Wrap a node title to fit `width`; if it needs more than `maxLines`,
+ * re-wrap one font size down (`shrinkFont`). Never truncates. Returns raw
+ * title lines (no indicator) plus the box height needed to contain them.
+ */
+export function fitNodeTitle({
+  title,
+  width,
+  baseFont,
+  reserveText = "",
+  padY,
+  maxLines,
+  shrinkFont,
+}: {
+  title: string;
+  width: number;
+  baseFont: number;
+  reserveText?: string;
+  padY: number;
+  maxLines: number;
+  shrinkFont: number;
+}): NodeTitleLayout {
+  let fontPx = baseFont;
+  let lines = wrapTitleToLines(title, width, fontPx, reserveText);
+  if (lines.length > maxLines) {
+    fontPx = shrinkFont;
+    lines = wrapTitleToLines(title, width, fontPx, reserveText);
+  }
+  const lineHeight = Math.round(fontPx * 1.3);
+  const height = padY * 2 + lines.length * lineHeight;
+  return { lines, fontPx, lineHeight, height };
+}
+
 export function fitTitleToWidth(
   title: string,
   boxWidthPx: number,
