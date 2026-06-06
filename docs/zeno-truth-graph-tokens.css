@@ -78,6 +78,25 @@
   --z-candidate-text: #3c3489;
   --z-candidate-soft: color-mix(in srgb, var(--z-candidate) 12%, transparent);
 
+  /* ---- 选中态填充 (borderless selection: a stronger fill, no ring) -------- */
+  --z-confirmed-fill-sel: color-mix(
+    in srgb,
+    var(--z-confirmed) 26%,
+    transparent
+  );
+  --z-candidate-fill-sel: color-mix(
+    in srgb,
+    var(--z-candidate) 26%,
+    transparent
+  );
+  --z-attention-fill-sel: color-mix(
+    in srgb,
+    var(--z-attention) 24%,
+    transparent
+  );
+  --z-rejected-fill-sel: color-mix(in srgb, var(--z-rejected) 24%, transparent);
+  --z-node-fill-sel: color-mix(in srgb, var(--z-fg) 11%, transparent);
+
   /* ---- 节点尺寸 ---------------------------------------------------------- */
   --z-node-radius: 7px; /* decision 普通矩形圆角 */
   --z-node-radius-target: 9px; /* 选中节点圆角 (略大) */

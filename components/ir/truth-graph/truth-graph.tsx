@@ -302,6 +302,7 @@ function nodeTone({
   if (node.status === "superseded" || node.kind === "rejection") {
     return {
       fill: "var(--z-rejected-soft)",
+      fillSel: "var(--z-rejected-fill-sel)",
       stroke: "var(--z-rejected)",
       text: "var(--z-rejected)",
       decoration: "line-through",
@@ -311,6 +312,7 @@ function nodeTone({
   if (node.kind === "open_question") {
     return {
       fill: "var(--z-attention-soft)",
+      fillSel: "var(--z-attention-fill-sel)",
       stroke: "var(--z-attention)",
       text: "var(--z-attention-text)",
       decoration: "none",
@@ -320,6 +322,7 @@ function nodeTone({
   if (node.status === "idea") {
     return {
       fill: "var(--z-node-fill)",
+      fillSel: "var(--z-node-fill-sel)",
       stroke: "var(--z-text-3)",
       text: "var(--z-text-3)",
       decoration: "none",
@@ -329,6 +332,7 @@ function nodeTone({
   if (node.status === "pending") {
     return {
       fill: "var(--z-candidate-soft)",
+      fillSel: "var(--z-candidate-fill-sel)",
       stroke: "var(--z-candidate)",
       text: "var(--z-candidate-text)",
       decoration: "none",
@@ -338,6 +342,7 @@ function nodeTone({
   if (isOnChain || isSelected) {
     return {
       fill: "var(--z-confirmed-soft)",
+      fillSel: "var(--z-confirmed-fill-sel)",
       stroke: "var(--z-confirmed)",
       text: "var(--z-confirmed)",
       decoration: "none",
@@ -347,6 +352,7 @@ function nodeTone({
   if (node.kind === "constraint" || node.kind === "hypothesis") {
     return {
       fill: "var(--z-node-fill)",
+      fillSel: "var(--z-node-fill-sel)",
       stroke: "var(--z-fact-stroke)",
       text: "var(--z-text-2)",
       decoration: "none",
@@ -425,7 +431,9 @@ function GraphNode({
       tabIndex={0}
     >
       <rect
-        fill={tone.fill}
+        // Selection is shown by a stronger fill (no border); `stroke` stays
+        // "none" except for the keyboard focus ring (via focus-visible CSS).
+        fill={isSelected ? tone.fillSel : tone.fill}
         height={box.height}
         rx={
           isRoot
@@ -434,8 +442,7 @@ function GraphNode({
               ? "var(--z-node-radius-target)"
               : "var(--z-node-radius)"
         }
-        // Borderless by default; the selected node keeps a ring for focus.
-        stroke={isSelected ? tone.stroke : "none"}
+        stroke="none"
         strokeWidth={strokeWidth}
         width={box.width}
         x={box.x}
