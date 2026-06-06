@@ -17,6 +17,7 @@ type ModelsPayload = {
 };
 
 test.describe("Model Selector", () => {
+  // biome-ignore lint/suspicious/noSkippedTests: these e2e cases require configured Supabase auth and at least one model provider
   test.skip(
     !hasSupabaseE2EConfig || !hasModelProviderE2EConfig,
     "Supabase auth and at least one model provider must be configured for model selector e2e."

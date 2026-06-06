@@ -46,6 +46,7 @@ async function createTopicViaApi(page: Page, label: string) {
 }
 
 test.describe("Workspace IR panel flow", () => {
+  // biome-ignore lint/suspicious/noSkippedTests: conditional e2e requires Supabase auth.
   test.skip(
     !hasSupabaseE2EConfig,
     "Supabase auth must be configured for workspace IR e2e."
@@ -88,6 +89,7 @@ test.describe("Workspace IR panel flow", () => {
       },
     });
     if (draftResponse.status() === 503) {
+      // biome-ignore lint/suspicious/noSkippedTests: IR tables are optional in older test databases.
       test.skip(true, "IR migrations are not applied in this test database.");
     }
 
@@ -182,6 +184,7 @@ test.describe("Workspace IR panel flow", () => {
   test("persists AI inline IR markers as pending candidates", async ({
     page,
   }) => {
+    // biome-ignore lint/suspicious/noSkippedTests: this case needs the deterministic Playwright model.
     test.skip(
       !(hasModelProviderE2EConfig && hasPlaywrightMockModel),
       "Set PLAYWRIGHT=True and at least one model provider env var to exercise the deterministic inline-marker mock."
@@ -197,6 +200,7 @@ test.describe("Workspace IR panel flow", () => {
     );
 
     if (preflightResponse.status() === 503) {
+      // biome-ignore lint/suspicious/noSkippedTests: IR tables are optional in older test databases.
       test.skip(true, "IR migrations are not applied in this test database.");
     }
 
@@ -276,6 +280,7 @@ test.describe("Workspace IR panel flow", () => {
       },
     });
     if (sweepResponse.status() === 503) {
+      // biome-ignore lint/suspicious/noSkippedTests: IR tables are optional in older test databases.
       test.skip(true, "IR migrations are not applied in this test database.");
     }
 

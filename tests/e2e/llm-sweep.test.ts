@@ -32,6 +32,7 @@ async function ensureIRMigration() {
 }
 
 test.describe("Real LLM IR sweep", () => {
+  // biome-ignore lint/suspicious/noSkippedTests: requires external Supabase and LLM credentials.
   test.skip(
     !(hasSupabaseE2EConfig && hasRealModelProviderConfig),
     "Supabase and a real model provider key must be configured."
@@ -40,6 +41,7 @@ test.describe("Real LLM IR sweep", () => {
   let user: Awaited<ReturnType<typeof createConfirmedTestUser>> | null = null;
 
   test.beforeEach(async ({ page }) => {
+    // biome-ignore lint/suspicious/noSkippedTests: migration is optional in older shared databases.
     test.skip(!(await ensureIRMigration()), "IR migration is not applied.");
 
     user = await createConfirmedTestUser();

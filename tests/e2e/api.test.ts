@@ -11,6 +11,7 @@ const CHAT_URL_REGEX = /\/chat\/[\w-]+/;
 const ERROR_TEXT_REGEX = /error|failed|trouble|oops/i;
 
 test.describe("Chat API Integration", () => {
+  // biome-ignore lint/suspicious/noSkippedTests: conditional e2e requires Supabase auth and a configured model provider.
   test.skip(
     !hasSupabaseE2EConfig || !hasModelProviderE2EConfig,
     "Supabase auth and at least one model provider must be configured for chat api e2e."
@@ -71,6 +72,7 @@ test.describe("Chat API Integration", () => {
 });
 
 test.describe("Chat Error Handling", () => {
+  // biome-ignore lint/suspicious/noSkippedTests: conditional e2e requires Supabase auth and a configured model provider.
   test.skip(
     !hasSupabaseE2EConfig || !hasModelProviderE2EConfig,
     "Supabase auth and at least one model provider must be configured for chat api e2e."
@@ -112,6 +114,7 @@ test.describe("Chat Error Handling", () => {
 });
 
 test.describe("Preset Prompts", () => {
+  // biome-ignore lint/suspicious/noSkippedTests: conditional e2e requires Supabase auth and a configured model provider.
   test.skip(
     !hasSupabaseE2EConfig || !hasModelProviderE2EConfig,
     "Supabase auth and at least one model provider must be configured for chat api e2e."

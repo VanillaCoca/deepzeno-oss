@@ -78,11 +78,13 @@ async function createPendingIR(
 }
 
 test.describe("Topic lifecycle IR model", () => {
+  // biome-ignore lint/suspicious/noSkippedTests: conditional e2e requires Supabase auth.
   test.skip(!hasSupabaseE2EConfig, "Supabase auth must be configured.");
 
   let user: Awaited<ReturnType<typeof createConfirmedTestUser>> | null = null;
 
   test.beforeEach(async ({ page }) => {
+    // biome-ignore lint/suspicious/noSkippedTests: migration is applied manually in shared Supabase.
     test.skip(
       !(await ensureTopicLifecycleMigration()),
       "Topic lifecycle migration is not applied."

@@ -8,6 +8,7 @@ import {
 } from "../helpers";
 
 test.describe("Chat Page", () => {
+  // biome-ignore lint/suspicious/noSkippedTests: conditional e2e requires Supabase auth and a configured model provider.
   test.skip(
     !hasSupabaseE2EConfig || !hasModelProviderE2EConfig,
     "Supabase auth and at least one model provider must be configured for chat e2e."
@@ -61,6 +62,7 @@ test.describe("Chat Page", () => {
 });
 
 test.describe("Chat Input Features", () => {
+  // biome-ignore lint/suspicious/noSkippedTests: conditional e2e requires Supabase auth and a configured model provider.
   test.skip(
     !hasSupabaseE2EConfig || !hasModelProviderE2EConfig,
     "Supabase auth and at least one model provider must be configured for chat e2e."
