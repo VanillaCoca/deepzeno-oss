@@ -63,14 +63,14 @@ type LayoutState = {
 export type TruthGraphMode = "truth" | "all";
 
 export type TruthGraphProps = {
-  childCounts: Map<string, number>;
+  childrenByParent: Map<string, IRNode[]>;
   edges: TruthGraphFlowEdge["edge"][];
-  focusParentTitle: string | null;
+  expandedIds: Set<string>;
   mode: TruthGraphMode;
   nodes: IRNode[];
-  onDrill: (parentId: string | null) => void;
   onModeChange: (mode: TruthGraphMode) => void;
   onSelect: (nodeId: string) => void;
+  onToggleExpand: (parentId: string) => void;
   selectedNodeId: string | null;
   topics: TruthGraphTopic[];
 };
@@ -79,6 +79,19 @@ const OVERVIEW_DIMS = { width: 236, baseFont: 13, padY: 10, padX: 14 };
 const CHAIN_DIMS = { width: 276, baseFont: 13, padY: 12, padX: 16 };
 const NODE_MAX_LINES = 4;
 const NODE_SHRINK_FONT = 11.5;
+
+// Inline expand: children render as rows nested directly beneath the parent's
+// title (the parent's laid-out box reserves the extra height so nothing overlaps).
+const CHILD_ROW = { height: 30, gap: 6, topGap: 8 };
+
+function expandedExtraHeight(count: number) {
+  if (count <= 0) {
+    return 0;
+  }
+  return (
+    CHILD_ROW.topGap + count * CHILD_ROW.height + (count - 1) * CHILD_ROW.gap
+  );
+}
 
 // Reserve text is stable per node (worst-case indicator width) so a node's
 // height never changes when it becomes selected/root — avoids relayout jitter.
@@ -137,18 +150,31 @@ const CHAIN_OPTIONS = {
   "elk.padding": "[top=24,left=20,bottom=24,right=20]",
 };
 
-function createOverviewGraph(model: TruthGraphModel): ElkGraph {
+function createOverviewGraph(
+  model: TruthGraphModel,
+  expandedIds: Set<string>,
+  childCountOf: (id: string) => number
+): ElkGraph {
   return {
     id: "truth-graph-overview-root",
     layoutOptions: OVERVIEW_OPTIONS,
     children: model.topicGroups.map((group) => ({
       id: topicLayoutId(group.topic.id),
       layoutOptions: TOPIC_OPTIONS,
-      children: group.nodes.map((node) => ({
-        id: node.id,
-        width: OVERVIEW_DIMS.width,
-        height: measureNode(node, OVERVIEW_DIMS).height,
-      })),
+      // Only roots are laid out; children render nested inside an expanded
+      // parent, so we reserve extra height on the parent box for them.
+      children: group.nodes
+        .filter((node) => !node.parentId)
+        .map((node) => {
+          const extra = expandedIds.has(node.id)
+            ? expandedExtraHeight(childCountOf(node.id))
+            : 0;
+          return {
+            id: node.id,
+            width: OVERVIEW_DIMS.width,
+            height: measureNode(node, OVERVIEW_DIMS).height + extra,
+          };
+        }),
     })),
     edges: [],
   };
@@ -372,31 +398,38 @@ function nodeTone({
 
 function GraphNode({
   box,
-  childCount = 0,
+  subNodes,
   hasSelection,
+  isExpanded = false,
   isOnChain,
   isRoot,
   isSelected,
   node,
-  onDrill,
   onSelect,
+  onToggleExpand,
 }: {
   box: NodeBox;
-  childCount?: number;
+  subNodes?: IRNode[];
   hasSelection: boolean;
+  isExpanded?: boolean;
   isOnChain: boolean;
   isRoot: boolean;
   isSelected: boolean;
   node: IRNode;
-  onDrill?: (parentId: string) => void;
   onSelect: (nodeId: string) => void;
+  onToggleExpand?: (parentId: string) => void;
 }) {
   const tone = nodeTone({ isOnChain, isSelected, node });
   const strokeWidth = isSelected
     ? "var(--z-stroke-w-target)"
     : "var(--z-stroke-w)";
   const dims = box.width >= CHAIN_DIMS.width ? CHAIN_DIMS : OVERVIEW_DIMS;
-  const { lines, fontPx, lineHeight } = measureNode(node, dims);
+  const measured = measureNode(node, dims);
+  const { lines, fontPx, lineHeight } = measured;
+  // Title keeps its original measured height; an expanded box is taller and the
+  // children render in the reserved space below the title.
+  const titleHeight = measured.height;
+  const childCount = subNodes?.length ?? 0;
   // Stage glyph gives candidates/ideas a non-color cue (color-blind safety).
   const stageGlyph =
     node.status === "pending" ? "◇ " : node.status === "idea" ? "○ " : "";
@@ -407,7 +440,7 @@ function GraphNode({
       `${index === 0 ? displayPrefix : ""}${line}${index === lines.length - 1 ? displaySuffix : ""}`
   );
   const leftX = box.x + dims.padX;
-  const blockTop = box.y + (box.height - lines.length * lineHeight) / 2;
+  const blockTop = box.y + (titleHeight - lines.length * lineHeight) / 2;
   const anchorLabel = isRoot ? "from here" : null;
   const selectNode = () => onSelect(node.id);
 
@@ -441,7 +474,7 @@ function GraphNode({
         // Selection is shown by a stronger fill (no border); `stroke` stays
         // "none" except for the keyboard focus ring (via focus-visible CSS).
         fill={isSelected ? tone.fillSel : tone.fill}
-        height={box.height}
+        height={titleHeight}
         rx={
           isRoot
             ? "var(--z-start-radius)"
@@ -487,20 +520,20 @@ function GraphNode({
           {anchorLabel}
         </text>
       ) : null}
-      {childCount > 0 && onDrill ? (
+      {childCount > 0 && onToggleExpand ? (
         // biome-ignore lint/a11y/useSemanticElements: SVG must stay in SVG space.
         <g
-          aria-label={`Open ${childCount} sub-node${childCount === 1 ? "" : "s"}`}
+          aria-label={`Toggle ${childCount} sub-node${childCount === 1 ? "" : "s"}`}
           className="cursor-pointer outline-none"
           onClick={(event) => {
             event.stopPropagation();
-            onDrill(node.id);
+            onToggleExpand(node.id);
           }}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
               event.stopPropagation();
-              onDrill(node.id);
+              onToggleExpand(node.id);
             }
           }}
           role="button"
@@ -510,9 +543,9 @@ function GraphNode({
             fill="var(--z-node-fill-sel)"
             height="16"
             rx="8"
-            width="34"
-            x={box.x + box.width - 40}
-            y={box.y + 6}
+            width="30"
+            x={box.x + box.width - 36}
+            y={box.y + (titleHeight - 16) / 2}
           />
           <text
             dominantBaseline="central"
@@ -520,13 +553,75 @@ function GraphNode({
             fontFamily="var(--z-font-sans)"
             fontSize="var(--z-font-anchor)"
             textAnchor="middle"
-            x={box.x + box.width - 23}
-            y={box.y + 14}
+            x={box.x + box.width - 21}
+            y={box.y + titleHeight / 2}
           >
-            {`⌄ ${childCount}`}
+            {`${isExpanded ? "▾" : "▸"} ${childCount}`}
           </text>
         </g>
       ) : null}
+      {isExpanded && subNodes
+        ? subNodes.map((child, index) => {
+            const cy =
+              box.y +
+              titleHeight +
+              CHILD_ROW.topGap +
+              index * (CHILD_ROW.height + CHILD_ROW.gap);
+            const childTone = nodeTone({
+              isOnChain: false,
+              isSelected: false,
+              node: child,
+            });
+            const childGlyph =
+              child.status === "pending"
+                ? "◇ "
+                : child.status === "idea"
+                  ? "○ "
+                  : "";
+            return (
+              // biome-ignore lint/a11y/useSemanticElements: SVG must stay in SVG space.
+              <g
+                aria-label={child.title}
+                className="cursor-pointer outline-none"
+                key={child.id}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelect(child.id);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onSelect(child.id);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+              >
+                <rect
+                  fill={childTone.fill}
+                  height={CHILD_ROW.height}
+                  rx="var(--z-node-radius)"
+                  width={box.width - 16}
+                  x={box.x + 8}
+                  y={cy}
+                />
+                <text
+                  dominantBaseline="central"
+                  fill={childTone.text}
+                  fontFamily="var(--z-font-sans)"
+                  fontSize="var(--z-font-topic)"
+                  textAnchor="start"
+                  textDecoration={childTone.decoration}
+                  x={box.x + 20}
+                  y={cy + CHILD_ROW.height / 2}
+                >
+                  {childGlyph + truncateIRTitle(child.title, 32)}
+                </text>
+              </g>
+            );
+          })
+        : null}
     </g>
   );
 }
@@ -582,14 +677,14 @@ function CompactTruthList({
 }
 
 export function TruthGraph({
-  childCounts,
+  childrenByParent,
   edges,
-  focusParentTitle,
+  expandedIds,
   mode,
   nodes,
-  onDrill,
   onModeChange,
   onSelect,
+  onToggleExpand,
   selectedNodeId,
   topics,
 }: TruthGraphProps) {
@@ -627,7 +722,11 @@ export function TruthGraph({
         import("elkjs/lib/elk.bundled.js"),
       ]);
       const elk = new ELK();
-      const overviewGraph = createOverviewGraph(model);
+      const overviewGraph = createOverviewGraph(
+        model,
+        expandedIds,
+        (id) => childrenByParent.get(id)?.length ?? 0
+      );
       const chainGraph = createChainGraph(model, chainNodeIds);
       const [overview, chain] = await Promise.all([
         elk.layout(overviewGraph),
@@ -652,7 +751,7 @@ export function TruthGraph({
     return () => {
       cancelled = true;
     };
-  }, [chainNodeIds, model, nodes.length]);
+  }, [chainNodeIds, childrenByParent, expandedIds, model, nodes.length]);
 
   if (nodes.length === 0) {
     return (
@@ -704,21 +803,7 @@ export function TruthGraph({
         data-testid="truth-graph-overview"
       >
         <div className="flex items-center justify-between gap-2 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-[var(--z-text-3)]">
-          {focusParentTitle ? (
-            <button
-              className="flex items-center gap-1 normal-case text-[var(--z-text-2)] hover:text-[var(--z-text)]"
-              onClick={() => onDrill(null)}
-              type="button"
-            >
-              <span aria-hidden="true">←</span>
-              <span className="text-[var(--z-text-3)]">Overview /</span>
-              <span className="max-w-[180px] truncate font-medium">
-                {truncateIRTitle(focusParentTitle, 32)}
-              </span>
-            </button>
-          ) : (
-            <span>Overview</span>
-          )}
+          <span>Overview</span>
           <div className="flex items-center gap-2">
             <div className="flex items-center rounded-md border border-[var(--z-topic-border)] p-0.5 normal-case">
               {(["truth", "all"] as const).map((scope) => (
@@ -853,15 +938,16 @@ export function TruthGraph({
                 return (
                   <GraphNode
                     box={box}
-                    childCount={childCounts.get(node.id) ?? 0}
                     hasSelection={Boolean(activeSelectedNodeId)}
+                    isExpanded={expandedIds.has(node.id)}
                     isOnChain={isOnChain}
                     isRoot={false}
                     isSelected={isSelected}
                     key={node.id}
                     node={node}
-                    onDrill={onDrill}
                     onSelect={onSelect}
+                    onToggleExpand={onToggleExpand}
+                    subNodes={childrenByParent.get(node.id)}
                   />
                 );
               })}

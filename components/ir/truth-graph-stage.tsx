@@ -15,8 +15,8 @@ export function TruthGraphStage() {
     useIR();
   const { topics, activeProjectId } = useWorkspace();
   const [graphMode, setGraphMode] = useState<TruthGraphMode>("truth");
-  // null = top level; otherwise we've drilled into a parent's sub-nodes.
-  const [focusParentId, setFocusParentId] = useState<string | null>(null);
+  // Parents whose sub-nodes are expanded inline beneath them.
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const { data: detail, mutate: mutateDetail } = useSWR<IRDetail>(
     irNodeKey(selectedNodeId),
@@ -50,22 +50,22 @@ export function TruthGraphStage() {
     });
   }, [graphMode, truth, candidates, ideas]);
 
-  // How many children each node has within the current scope (for the count chip).
-  const childCounts = useMemo(() => {
-    const counts = new Map<string, number>();
+  // Children grouped by parent — drives the count badge + the nested rows.
+  const childrenByParent = useMemo(() => {
+    const map = new Map<string, IRNode[]>();
     for (const node of baseNodes) {
       if (node.parentId) {
-        counts.set(node.parentId, (counts.get(node.parentId) ?? 0) + 1);
+        const list = map.get(node.parentId) ?? [];
+        list.push(node);
+        map.set(node.parentId, list);
       }
     }
-    return counts;
+    return map;
   }, [baseNodes]);
 
-  // Top level shows roots (no parent); drilling shows one parent's children.
-  const graphNodes = useMemo(
-    () => baseNodes.filter((node) => (node.parentId ?? null) === focusParentId),
-    [baseNodes, focusParentId]
-  );
+  // Pass the full set: the overview lays out roots and nests children inside
+  // expanded parents, while the chain still resolves any node's upstream.
+  const graphNodes = baseNodes;
 
   const graphEdges = useMemo<IREdge[]>(() => {
     const ids = new Set(graphNodes.map((node) => node.id));
@@ -75,37 +75,46 @@ export function TruthGraphStage() {
     );
   }, [graphMode, truthEdges, allEdgesData, graphNodes]);
 
-  // The detail/action pane works for whatever node is selected (found in the
-  // full set, so it stays open even when drilled), enabling inline promote/confirm.
+  // The detail/action pane works for whatever node is selected (including a
+  // nested child), enabling inline promote/confirm.
   const selectedNode =
     baseNodes.find((node) => node.id === selectedNodeId) ?? null;
-  const focusParent = focusParentId
-    ? (baseNodes.find((node) => node.id === focusParentId) ?? null)
-    : null;
   const actions = useIRActions(selectedNode, mutateDetail);
   const truthGraphTopics = useMemo(
     () => topics.map((topic) => ({ id: topic.id, label: topic.label })),
     [topics]
   );
 
-  // Switching scope can invalidate the drilled parent — return to top level.
+  // Switching scope collapses any expanded parents to avoid stale state.
   function handleModeChange(mode: TruthGraphMode) {
     setGraphMode(mode);
-    setFocusParentId(null);
+    setExpandedIds(new Set());
+  }
+
+  function toggleExpand(parentId: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(parentId)) {
+        next.delete(parentId);
+      } else {
+        next.add(parentId);
+      }
+      return next;
+    });
   }
 
   return (
     <div className="flex h-full flex-col pt-16" data-testid="truth-graph-stage">
       <div className="min-h-0 flex-1 overflow-auto">
         <TruthGraph
-          childCounts={childCounts}
+          childrenByParent={childrenByParent}
           edges={graphEdges}
-          focusParentTitle={focusParent?.title ?? null}
+          expandedIds={expandedIds}
           mode={graphMode}
           nodes={graphNodes}
-          onDrill={setFocusParentId}
           onModeChange={handleModeChange}
           onSelect={selectNode}
+          onToggleExpand={toggleExpand}
           selectedNodeId={selectedNodeId}
           topics={truthGraphTopics}
         />
