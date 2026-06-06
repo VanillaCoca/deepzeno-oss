@@ -141,8 +141,8 @@ const TOPIC_OPTIONS = {
 };
 
 // The Chain now lives in the wide, short bottom card, so it flows left → right
-// (root "from here" on the left, the selected node on the right). A horizontal
-// layout fits a landscape card far better than a vertical one.
+// (foundational premises marked ▷ on the left, the selected node on the right).
+// A horizontal layout fits a landscape card far better than a vertical one.
 const CHAIN_OPTIONS = {
   "elk.algorithm": "layered",
   "elk.direction": "RIGHT",
@@ -465,7 +465,6 @@ function GraphNode({
   );
   const leftX = box.x + dims.padX;
   const blockTop = box.y + (titleHeight - lines.length * lineHeight) / 2;
-  const anchorLabel = isRoot ? "from here" : null;
   // Stop propagation so selecting a node never bubbles to the canvas-wide
   // deselect handler on the scroll container.
   function handleClick(event: MouseEvent<SVGGElement>) {
@@ -538,18 +537,6 @@ function GraphNode({
           </tspan>
         ))}
       </text>
-      {anchorLabel ? (
-        <text
-          fill="var(--z-text-3)"
-          fontFamily="var(--z-font-sans)"
-          fontSize="var(--z-font-anchor)"
-          textAnchor="middle"
-          x={box.x + box.width / 2}
-          y={box.y - 6}
-        >
-          {anchorLabel}
-        </text>
-      ) : null}
       {subNodeCount > 0 ? (
         // Passive badge: signals "has N sub-nodes"; the sub-nodes themselves
         // live in the detail panel + chain when this node is selected.
