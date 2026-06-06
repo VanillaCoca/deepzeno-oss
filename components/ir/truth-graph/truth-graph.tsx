@@ -1,7 +1,7 @@
 "use client";
 
 import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
-import { fitTitleToWidth } from "@/lib/ir/fit-title";
+import { fitNodeTitle } from "@/lib/ir/fit-title";
 import type { IRNode } from "@/lib/ir/types";
 import { getIRTypeLabel, truncateIRTitle } from "@/lib/ir/types";
 import { cn } from "@/lib/utils";
@@ -68,8 +68,32 @@ export type TruthGraphProps = {
   topics: TruthGraphTopic[];
 };
 
-const OVERVIEW_NODE = { width: 168, height: 34 };
-const CHAIN_NODE = { width: 218, height: 44 };
+const OVERVIEW_DIMS = { width: 168, baseFont: 13, padY: 9 };
+const CHAIN_DIMS = { width: 218, baseFont: 13, padY: 13 };
+const NODE_MAX_LINES = 4;
+const NODE_SHRINK_FONT = 11.5;
+
+// Reserve text is stable per node (worst-case indicator width) so a node's
+// height never changes when it becomes selected/root — avoids relayout jitter.
+function nodeReserveText(node: IRNode) {
+  return `✓ ${node.kind === "open_question" ? " ?" : ""}`;
+}
+
+function measureNode(
+  node: IRNode,
+  dims: { width: number; baseFont: number; padY: number }
+) {
+  return fitNodeTitle({
+    title: node.title,
+    width: dims.width,
+    baseFont: dims.baseFont,
+    reserveText: nodeReserveText(node),
+    padY: dims.padY,
+    maxLines: NODE_MAX_LINES,
+    shrinkFont: NODE_SHRINK_FONT,
+  });
+}
+
 const GRAPH_MIN_NODE_COUNT = 3;
 const CHAIN_EDGE_LABEL = "needs";
 
@@ -113,8 +137,8 @@ function createOverviewGraph(model: TruthGraphModel): ElkGraph {
       layoutOptions: TOPIC_OPTIONS,
       children: group.nodes.map((node) => ({
         id: node.id,
-        width: OVERVIEW_NODE.width,
-        height: OVERVIEW_NODE.height,
+        width: OVERVIEW_DIMS.width,
+        height: measureNode(node, OVERVIEW_DIMS).height,
       })),
     })),
     edges: [],
@@ -134,11 +158,13 @@ function createChainGraph(
   return {
     id: "truth-graph-chain-root",
     layoutOptions: CHAIN_OPTIONS,
-    children: [...chainNodeIds].map((nodeId) => ({
-      id: nodeId,
-      width: CHAIN_NODE.width,
-      height: CHAIN_NODE.height,
-    })),
+    children: [...chainNodeIds].map((nodeId) => {
+      const node = model.nodeById.get(nodeId);
+      const height = node
+        ? measureNode(node, CHAIN_DIMS).height
+        : CHAIN_DIMS.padY * 2 + 17;
+      return { id: nodeId, width: CHAIN_DIMS.width, height };
+    }),
     edges: chainEdges.map((edge) => ({
       id: edge.id,
       sources: [edge.parentId],
@@ -271,21 +297,6 @@ function isDiamond(node: IRNode) {
   return node.kind === "open_question";
 }
 
-function nodeLabel({
-  isRoot,
-  isSelected,
-  node,
-}: {
-  isRoot: boolean;
-  isSelected: boolean;
-  node: IRNode;
-}) {
-  const prefix = isRoot ? "▷ " : isSelected ? "✓ " : "";
-  const suffix = node.kind === "open_question" ? " ?" : "";
-
-  return `${prefix}${fitTitleToWidth(node.title, OVERVIEW_NODE.width, 13, prefix + suffix)}${suffix}`;
-}
-
 function GraphNode({
   box,
   hasSelection,
@@ -307,8 +318,17 @@ function GraphNode({
   const strokeWidth = isSelected
     ? "var(--z-stroke-w-target)"
     : "var(--z-stroke-w)";
-  const title = nodeLabel({ isRoot, isSelected, node });
-  const anchorLabel = isSelected ? "you selected" : isRoot ? "from here" : null;
+  const dims = box.width >= CHAIN_DIMS.width ? CHAIN_DIMS : OVERVIEW_DIMS;
+  const { lines, fontPx, lineHeight } = measureNode(node, dims);
+  const displayPrefix = isRoot ? "▷ " : isSelected ? "✓ " : "";
+  const displaySuffix = node.kind === "open_question" ? " ?" : "";
+  const renderLines = lines.map(
+    (line, index) =>
+      `${index === 0 ? displayPrefix : ""}${line}${index === lines.length - 1 ? displaySuffix : ""}`
+  );
+  const cx = box.x + box.width / 2;
+  const blockTop = box.y + (box.height - lines.length * lineHeight) / 2;
+  const anchorLabel = isRoot ? "from here" : null;
   const selectNode = () => onSelect(node.id);
 
   function handleKeyDown(event: KeyboardEvent<SVGGElement>) {
@@ -366,14 +386,21 @@ function GraphNode({
         dominantBaseline="central"
         fill={tone.text}
         fontFamily="var(--z-font-sans)"
-        fontSize="var(--z-font-node)"
+        fontSize={fontPx}
         fontWeight={isSelected ? "600" : "500"}
         textAnchor="middle"
         textDecoration={tone.decoration}
-        x={box.x + box.width / 2}
-        y={box.y + box.height / 2}
       >
-        {title}
+        {renderLines.map((line, index) => (
+          <tspan
+            // biome-ignore lint/suspicious/noArrayIndexKey: line order is stable for a given title
+            key={index}
+            x={cx}
+            y={blockTop + lineHeight / 2 + index * lineHeight}
+          >
+            {line}
+          </tspan>
+        ))}
       </text>
       {anchorLabel ? (
         <text
