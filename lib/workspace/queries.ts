@@ -557,6 +557,24 @@ export async function getProjectByIdForUser(projectId: string, userId: string) {
   return row ? mapProject(row as DatabaseRecord) : null;
 }
 
+// Ownership-scoped delete: the user_id filter ensures a user can only delete
+// their own project. Child rows (topics, ir_nodes, ir_edges, …) are removed by
+// the ON DELETE CASCADE foreign keys. Returns true when a row was deleted.
+export async function deleteProjectForUser(projectId: string, userId: string) {
+  const client = getClient();
+  const rows = await ensureResult(
+    client
+      .from("projects")
+      .delete()
+      .eq("id", projectId)
+      .eq("user_id", userId)
+      .select("id"),
+    "Failed to delete project"
+  );
+
+  return Array.isArray(rows) && rows.length > 0;
+}
+
 export async function createProjectForUser({
   userId,
   userEmail,

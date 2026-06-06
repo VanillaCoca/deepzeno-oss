@@ -1,8 +1,7 @@
-import { formatDistanceToNowStrict } from "date-fns";
-import Link from "next/link";
 import { Suspense } from "react";
 import { requireAuth } from "@/app/(auth)/auth";
 import { CreateProjectModal } from "@/components/create-project-modal";
+import { ProjectCard } from "@/components/project-card";
 import { Button } from "@/components/ui/button";
 import { listProjectSummariesByUserId } from "@/lib/workspace/queries";
 import type { WorkspaceProjectSummary } from "@/lib/workspace/types";
@@ -79,25 +78,11 @@ async function HomepageContent() {
   return (
     <div className="flex flex-col gap-2">
       {projects.map((project) => (
-        <Link
-          className="cursor-pointer rounded-lg border border-border bg-background p-4 transition-colors hover:bg-muted/30"
+        <ProjectCard
           href={buildWorkspaceHref(project)}
           key={project.id}
-        >
-          <div className="flex items-start justify-between gap-4">
-            <p className="text-base font-medium text-foreground">
-              {project.name}
-            </p>
-            <p className="text-right text-sm text-muted-foreground">
-              {formatDistanceToNowStrict(new Date(project.updatedAt), {
-                addSuffix: true,
-              })}
-            </p>
-          </div>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {project.topicCount} {project.topicCount === 1 ? "topic" : "topics"}
-          </p>
-        </Link>
+          project={project}
+        />
       ))}
     </div>
   );
