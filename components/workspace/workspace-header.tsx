@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 export type WorkspaceView = "conversation" | "truth-graph";
 
 const ISLAND =
-  "pointer-events-auto inline-flex h-9 items-center gap-1 rounded-xl border border-[var(--ir-border-default)] bg-[color-mix(in_srgb,var(--ir-bg-panel)_72%,transparent)] px-1.5 shadow-[0_6px_20px_rgba(0,0,0,0.28)] backdrop-blur-md";
+  "pointer-events-auto inline-flex h-9 items-center gap-1 rounded-xl border border-[var(--ir-border-default)] bg-[color-mix(in_srgb,var(--ir-bg-panel)_72%,transparent)] px-1.5 backdrop-blur-md";
 
 export function WorkspaceHeader({
   view,
