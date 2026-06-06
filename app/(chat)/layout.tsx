@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
-import Script from "next/script";
 import { redirect } from "next/navigation";
+import Script from "next/script";
 import { Suspense } from "react";
 import { DataStreamProvider } from "@/components/chat/data-stream-provider";
 import { ChatShell } from "@/components/chat/shell";
@@ -24,11 +24,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
-async function ProtectedWorkspace({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+async function ProtectedWorkspace({ children }: { children: React.ReactNode }) {
   const [session, cookieStore] = await Promise.all([auth(), cookies()]);
   const isSidebarOpen = cookieStore.get("sidebar_state")?.value !== "false";
 

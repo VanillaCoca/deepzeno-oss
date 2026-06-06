@@ -70,8 +70,7 @@ function mapSuggestion(row: DatabaseRecord): Suggestion {
     documentCreatedAt: toDate(row.documentCreatedAt),
     originalText: String(row.originalText),
     suggestedText: String(row.suggestedText),
-    description:
-      typeof row.description === "string" ? row.description : null,
+    description: typeof row.description === "string" ? row.description : null,
     isResolved: Boolean(row.isResolved),
     userId: String(row.userId),
     createdAt: toDate(row.createdAt),
@@ -116,7 +115,7 @@ export async function saveChat({
 }) {
   const client = getClient();
 
-  return ensureResult(
+  return await ensureResult(
     client.from("Chat").insert({
       id,
       createdAt: new Date().toISOString(),
@@ -271,7 +270,7 @@ export async function getChatById({ id }: { id: string }) {
 export async function saveMessages({ messages }: { messages: DBMessage[] }) {
   const client = getClient();
 
-  return ensureResult(
+  return await ensureResult(
     client.from("Message_v2").insert(
       messages.map((message) => ({
         ...message,
@@ -291,7 +290,7 @@ export async function updateMessage({
 }) {
   const client = getClient();
 
-  return ensureResult(
+  return await ensureResult(
     client.from("Message_v2").update({ parts }).eq("id", id),
     "Failed to update message"
   );
@@ -330,19 +329,17 @@ export async function voteMessage({
 }) {
   const client = getClient();
 
-  return ensureResult(
-    client
-      .from("Vote_v2")
-      .upsert(
-        {
-          chatId,
-          messageId,
-          isUpvoted: type === "up",
-        },
-        {
-          onConflict: "chatId,messageId",
-        }
-      ),
+  return await ensureResult(
+    client.from("Vote_v2").upsert(
+      {
+        chatId,
+        messageId,
+        isUpvoted: type === "up",
+      },
+      {
+        onConflict: "chatId,messageId",
+      }
+    ),
     "Failed to vote message"
   );
 }
@@ -535,7 +532,7 @@ export async function saveSuggestions({
 }) {
   const client = getClient();
 
-  return ensureResult(
+  return await ensureResult(
     client.from("Suggestion").insert(
       suggestions.map((suggestion) => ({
         ...suggestion,
@@ -560,7 +557,9 @@ export async function getSuggestionsByDocumentId({
       "Failed to get suggestions by document id"
     );
 
-    return toRecords(suggestions).map((suggestion) => mapSuggestion(suggestion));
+    return toRecords(suggestions).map((suggestion) =>
+      mapSuggestion(suggestion)
+    );
   } catch {
     throw new ChatbotError(
       "bad_request:database",
@@ -625,7 +624,11 @@ export async function deleteMessagesByChatIdAfterTimestamp({
     );
 
     return ensureResult(
-      client.from("Message_v2").delete().eq("chatId", chatId).in("id", messageIds),
+      client
+        .from("Message_v2")
+        .delete()
+        .eq("chatId", chatId)
+        .in("id", messageIds),
       "Failed to delete messages by chat id after timestamp"
     );
   } catch {
@@ -645,7 +648,7 @@ export async function updateChatVisibilityById({
 }) {
   const client = getClient();
 
-  return ensureResult(
+  return await ensureResult(
     client.from("Chat").update({ visibility }).eq("id", chatId),
     "Failed to update chat visibility by id"
   );
@@ -724,7 +727,7 @@ export async function createStreamId({
 }) {
   const client = getClient();
 
-  return ensureResult(
+  return await ensureResult(
     client.from("Stream").insert({
       id: streamId,
       chatId,

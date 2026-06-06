@@ -3,13 +3,7 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import type { UIMessage } from "ai";
 import equal from "fast-deep-equal";
-import {
-  ArrowUpIcon,
-  BrainIcon,
-  EyeIcon,
-  LockIcon,
-  WrenchIcon,
-} from "lucide-react";
+import { ArrowUpIcon, BrainIcon, EyeIcon, WrenchIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
