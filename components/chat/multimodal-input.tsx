@@ -736,6 +736,7 @@ function ComposerPlusMenu({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
+            aria-label="Add attachment or import"
             className="h-7 w-7 rounded-lg border border-border/40 p-1 text-muted-foreground hover:text-foreground"
             data-testid="composer-plus"
             variant="ghost"
