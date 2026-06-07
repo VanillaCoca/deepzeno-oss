@@ -1,5 +1,6 @@
 "use client";
 
+import { MessageSquarePlusIcon, Share2Icon } from "lucide-react";
 import {
   type CSSProperties,
   type KeyboardEvent,
@@ -12,6 +13,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { Button } from "@/components/ui/button";
 import { fitNodeTitle } from "@/lib/ir/fit-title";
 import type { IRNode } from "@/lib/ir/types";
 import { getIRTypeLabel, truncateIRTitle } from "@/lib/ir/types";
@@ -85,6 +87,8 @@ export type TruthGraphProps = {
   nodes: IRNode[];
   onModeChange: (mode: TruthGraphMode) => void;
   onSelect: (nodeId: string | null) => void;
+  // Lets the empty state send the user to the conversation to start building.
+  onStartConversation?: () => void;
   selectedNodeId: string | null;
   topics: TruthGraphTopic[];
 };
@@ -778,6 +782,7 @@ export function TruthGraph({
   nodes,
   onModeChange,
   onSelect,
+  onStartConversation,
   selectedNodeId,
   topics,
 }: TruthGraphProps) {
@@ -879,10 +884,35 @@ export function TruthGraph({
   );
 
   if (nodes.length === 0) {
+    // Empty state — new users land here first, so explain what this canvas is
+    // for and give a clear next step (industry-standard empty-state pattern:
+    // icon → title → one-line explanation → primary action).
     return (
-      <p className="px-3 py-4 text-xs text-[var(--ir-text-tertiary)]">
-        No truth nodes yet.
-      </p>
+      <div className="flex h-full min-h-[360px] flex-col items-center justify-center px-6 text-center">
+        <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-[var(--z-node-fill)] text-[var(--z-text-3)]">
+          <Share2Icon className="size-6" />
+        </div>
+        <h2 className="font-semibold text-[15px] text-[var(--z-text)]">
+          No truths yet
+        </h2>
+        <p className="mt-2 max-w-md text-sm leading-[1.6] text-[var(--z-text-3)]">
+          This is your truth graph — a living map of the decisions, constraints,
+          and facts you've confirmed, linked by how they build on one another.
+          Talk things through in the conversation and confirm what matters; it
+          will appear here automatically.
+        </p>
+        {onStartConversation ? (
+          <Button
+            className="mt-5"
+            onClick={onStartConversation}
+            size="sm"
+            variant="secondary"
+          >
+            <MessageSquarePlusIcon className="size-4" />
+            Start a conversation
+          </Button>
+        ) : null}
+      </div>
     );
   }
 

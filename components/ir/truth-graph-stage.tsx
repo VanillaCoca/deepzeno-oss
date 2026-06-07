@@ -13,7 +13,7 @@ import { fetcher } from "@/lib/utils";
 export function TruthGraphStage() {
   const { truth, truthEdges, ideas, candidates, selectedNodeId, selectNode } =
     useIR();
-  const { topics, activeProjectId } = useWorkspace();
+  const { topics, activeProjectId, requestView } = useWorkspace();
   const [graphMode, setGraphMode] = useState<TruthGraphMode>("truth");
 
   const { data: detail, mutate: mutateDetail } = useSWR<IRDetail>(
@@ -106,6 +106,7 @@ export function TruthGraphStage() {
           nodes={graphNodes}
           onModeChange={setGraphMode}
           onSelect={selectNode}
+          onStartConversation={() => requestView("conversation")}
           selectedNodeId={selectedNodeId}
           topics={truthGraphTopics}
         />
