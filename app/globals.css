@@ -379,7 +379,10 @@ textarea:focus-visible {
     var(--muted-foreground) 58%,
     var(--muted-foreground) 100%
   );
-  background-repeat: no-repeat;
+  /* Tiled (NOT no-repeat): the dim grey always covers the text, so characters
+     can never fall outside the gradient and turn transparent — only the bright
+     band sweeps. */
+  background-repeat: repeat;
   background-size: 200% 100%;
   background-position: 150% 0;
   -webkit-background-clip: text;
