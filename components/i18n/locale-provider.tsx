@@ -9,6 +9,7 @@ import {
 } from "@/lib/i18n/dictionaries";
 import { detailMessages } from "@/lib/i18n/messages/detail";
 import { dialogsMessages } from "@/lib/i18n/messages/dialogs";
+import { graphMessages } from "@/lib/i18n/messages/graph";
 
 export const LOCALE_STORAGE_KEY = "zeno-locale";
 
@@ -16,9 +17,24 @@ export const LOCALE_STORAGE_KEY = "zeno-locale";
 // (nav/account/detail/dialog/…) resolves from one place. dictionaries.ts and
 // the per-feature fragment files stay independent.
 const mergedDictionaries: Record<Locale, Record<string, string>> = {
-  en: { ...dictionaries.en, ...detailMessages.en, ...dialogsMessages.en },
-  zh: { ...dictionaries.zh, ...detailMessages.zh, ...dialogsMessages.zh },
-  fr: { ...dictionaries.fr, ...detailMessages.fr, ...dialogsMessages.fr },
+  en: {
+    ...dictionaries.en,
+    ...detailMessages.en,
+    ...dialogsMessages.en,
+    ...graphMessages.en,
+  },
+  zh: {
+    ...dictionaries.zh,
+    ...detailMessages.zh,
+    ...dialogsMessages.zh,
+    ...graphMessages.zh,
+  },
+  fr: {
+    ...dictionaries.fr,
+    ...detailMessages.fr,
+    ...dialogsMessages.fr,
+    ...graphMessages.fr,
+  },
 };
 
 function interpolate(

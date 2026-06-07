@@ -963,12 +963,16 @@ export function TruthGraph({
         data-testid="truth-graph-overview"
       >
         <div className="flex items-center justify-between gap-2 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-[var(--z-text-3)]">
-          <span>Overview</span>
+          <span>{t("graph.overview")}</span>
           <div className="flex items-center gap-2">
             <div className="flex items-center rounded-md border border-[var(--z-topic-border)] p-0.5 normal-case">
               {(["truth", "all"] as const).map((scope) => (
                 <button
-                  aria-label={`Show ${scope === "truth" ? "truths only" : "all stages"}`}
+                  aria-label={
+                    scope === "truth"
+                      ? t("graph.showTruthsOnly")
+                      : t("graph.showAllStages")
+                  }
                   aria-pressed={mode === scope}
                   className={cn(
                     "rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors",
@@ -980,25 +984,32 @@ export function TruthGraph({
                   onClick={() => onModeChange(scope)}
                   type="button"
                 >
-                  {scope === "truth" ? "Truth" : "All"}
+                  {scope === "truth" ? t("graph.truth") : t("graph.all")}
                 </button>
               ))}
             </div>
             <span className="normal-case">
-              {nodes.length} {mode === "all" ? "nodes" : "truths"}
+              {nodes.length}{" "}
+              {mode === "all" ? t("graph.nodes") : t("graph.truths")}
             </span>
           </div>
         </div>
         {mode === "all" ? (
           <div className="flex items-center gap-3 px-3 pb-1.5 text-[10px] text-[var(--z-text-3)]">
-            {(
-              [
-                { color: "var(--z-confirmed)", label: "Truth" },
-                { color: "var(--z-candidate)", label: "Candidate" },
-                { color: "var(--z-text-3)", label: "Idea" },
-              ] as const
-            ).map((item) => (
-              <span className="flex items-center gap-1" key={item.label}>
+            {[
+              {
+                color: "var(--z-confirmed)",
+                key: "truth",
+                label: t("graph.truth"),
+              },
+              {
+                color: "var(--z-candidate)",
+                key: "candidate",
+                label: t("graph.candidate"),
+              },
+              { color: "var(--z-text-3)", key: "idea", label: t("graph.idea") },
+            ].map((item) => (
+              <span className="flex items-center gap-1" key={item.key}>
                 <span
                   className="size-2 rounded-[2px]"
                   style={{ backgroundColor: item.color }}
@@ -1018,7 +1029,7 @@ export function TruthGraph({
           style={{ touchAction: "none" }}
         >
           <svg
-            aria-label="Truth graph overview grouped by topic"
+            aria-label={t("graph.overviewAria")}
             className="h-full w-full"
             role="img"
           >
@@ -1135,7 +1146,7 @@ export function TruthGraph({
               Chain (bottom) cards. */}
           <div className="absolute top-2 left-2 z-20 flex items-center gap-0.5 rounded-lg border border-[var(--z-topic-border)] bg-[var(--z-card-bg)] p-0.5">
             <button
-              aria-label="Zoom out"
+              aria-label={t("graph.zoomOut")}
               className="flex size-6 items-center justify-center rounded text-sm leading-none text-[var(--z-text-2)] hover:bg-[var(--z-node-fill)]"
               onClick={overviewPanZoom.zoomOut}
               type="button"
@@ -1143,7 +1154,7 @@ export function TruthGraph({
               −
             </button>
             <button
-              aria-label="Fit to view"
+              aria-label={t("graph.fit")}
               className="flex size-6 items-center justify-center rounded text-[13px] leading-none text-[var(--z-text-2)] hover:bg-[var(--z-node-fill)]"
               onClick={overviewPanZoom.fit}
               type="button"
@@ -1151,7 +1162,7 @@ export function TruthGraph({
               ⤢
             </button>
             <button
-              aria-label="Zoom in"
+              aria-label={t("graph.zoomIn")}
               className="flex size-6 items-center justify-center rounded text-sm leading-none text-[var(--z-text-2)] hover:bg-[var(--z-node-fill)]"
               onClick={overviewPanZoom.zoomIn}
               type="button"
@@ -1174,8 +1185,10 @@ export function TruthGraph({
           }}
         >
           <div className="flex items-center justify-between gap-2 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-[var(--z-text-3)]">
-            <span>Chain</span>
-            <span className="normal-case">{chainNodeIds.size} steps</span>
+            <span>{t("graph.chain")}</span>
+            <span className="normal-case">
+              {chainNodeIds.size} {t("graph.steps")}
+            </span>
           </div>
           {/* Fit-scale wrapper: the SVG is scaled to fit this box exactly, so
               the whole chain is always visible without panning/zooming. */}
@@ -1190,7 +1203,7 @@ export function TruthGraph({
               }}
             >
               <svg
-                aria-label="Selected truth upstream chain"
+                aria-label={t("graph.chainAria")}
                 height={chainHeight * chainFit.scale}
                 preserveAspectRatio="xMidYMid meet"
                 role="img"
