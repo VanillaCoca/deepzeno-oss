@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useLocale } from "@/components/i18n/locale-provider";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,6 +34,7 @@ export function ProjectCard({
   project: WorkspaceProjectSummary;
 }) {
   const router = useRouter();
+  const { t } = useLocale();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -50,12 +52,12 @@ export function ProjectCard({
         throw new Error("Request failed");
       }
 
-      toast.success("Project deleted.");
+      toast.success(t("dialog.projectCard.deletedToast"));
       setConfirmOpen(false);
       router.refresh();
     } catch (error) {
       console.error("Delete project failed", error);
-      toast.error("Failed to delete project.");
+      toast.error(t("dialog.projectCard.deleteFailedToast"));
     } finally {
       setIsDeleting(false);
     }
@@ -78,7 +80,10 @@ export function ProjectCard({
           </p>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">
-          {project.topicCount} {project.topicCount === 1 ? "topic" : "topics"}
+          {project.topicCount}{" "}
+          {project.topicCount === 1
+            ? t("dialog.projectCard.topicSingular")
+            : t("dialog.projectCard.topicPlural")}
         </p>
       </Link>
 
@@ -86,7 +91,9 @@ export function ProjectCard({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              aria-label={`Actions for ${project.name}`}
+              aria-label={t("dialog.projectCard.actionsFor", {
+                name: project.name,
+              })}
               className="text-muted-foreground hover:text-foreground"
               size="icon-sm"
               variant="ghost"
@@ -103,7 +110,7 @@ export function ProjectCard({
               variant="destructive"
             >
               <Trash2Icon />
-              Delete project
+              {t("dialog.projectCard.deleteProject")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -112,14 +119,19 @@ export function ProjectCard({
       <AlertDialog onOpenChange={setConfirmOpen} open={confirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this project?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t("dialog.projectCard.confirmTitle")}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently deletes “{project.name}” and all of its
-              judgments, truths, and history. This can&rsquo;t be undone.
+              {t("dialog.projectCard.confirmDescription", {
+                name: project.name,
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>
+              {t("dialog.projectCard.cancel")}
+            </AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive/10 text-destructive hover:bg-destructive/20"
               disabled={isDeleting}
@@ -128,7 +140,7 @@ export function ProjectCard({
                 handleDelete();
               }}
             >
-              Delete
+              {t("dialog.projectCard.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
