@@ -20,8 +20,18 @@ import { ProjectSidebar } from "./project-sidebar";
  * must be loaded before the user can interact.
  */
 function WorkspaceReadyVeil() {
-  const { isLoading: workspaceLoading } = useWorkspace();
+  const { isLoading: workspaceLoading, sandboxNavPending } = useWorkspace();
   const { isLoading: irLoading } = useIR();
+
+  if (sandboxNavPending) {
+    return (
+      <LoadingOverlay
+        message="Opening the conversation"
+        show
+        submessage="Bringing your decision into the chat"
+      />
+    );
+  }
 
   if (workspaceLoading) {
     return (
@@ -60,6 +70,7 @@ export function WorkspaceShell({
     "conversation"
   );
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { viewRequest, sandboxNavPending, endSandboxNav } = useWorkspace();
 
   // The server can't read localStorage, so it always renders the default view.
   // Reflect the stored view only AFTER mount, so the first client render matches
@@ -69,6 +80,23 @@ export function WorkspaceShell({
     setHydrated(true);
   }, []);
   const activeView: WorkspaceView = hydrated ? view : "conversation";
+
+  // A deep component (e.g. the IR action column) can request a view switch.
+  useEffect(() => {
+    if (viewRequest) {
+      setView(viewRequest.view);
+    }
+  }, [viewRequest, setView]);
+
+  // Safety net: never let the sandbox veil get stuck if the conversation never
+  // signals "ready" (e.g. no chat mounted). The chat clears it sooner.
+  useEffect(() => {
+    if (!sandboxNavPending) {
+      return;
+    }
+    const timer = setTimeout(() => endSandboxNav(), 4000);
+    return () => clearTimeout(timer);
+  }, [sandboxNavPending, endSandboxNav]);
 
   return (
     <SidebarProvider

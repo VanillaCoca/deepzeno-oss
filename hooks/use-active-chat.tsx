@@ -64,6 +64,8 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     isArchivedTopicReadonly,
     isLoading: isWorkspaceLoading,
     consumeInjectedDecisionContext,
+    sandboxNavPending,
+    endSandboxNav,
   } = useWorkspace();
 
   const fallbackChatIdRef = useRef(generateUUID());
@@ -185,6 +187,14 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
 
   const initialMessages: ChatMessage[] = chatData?.messages ?? [];
   const visibility: VisibilityType = chatData?.visibility ?? "private";
+
+  // After a "bring to sandbox" hand-off, drop the blocking veil once the
+  // conversation (with its prior history) is ready to use.
+  useEffect(() => {
+    if (sandboxNavPending && isWorkspaceReady && !isLoading) {
+      endSandboxNav();
+    }
+  }, [sandboxNavPending, isWorkspaceReady, isLoading, endSandboxNav]);
 
   const {
     messages,

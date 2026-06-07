@@ -39,6 +39,10 @@ type InjectedSandboxContext = {
   consumeOnNextSend: boolean;
 };
 
+type WorkspaceViewName = "conversation" | "truth-graph";
+
+type ViewRequest = { view: WorkspaceViewName; nonce: number };
+
 type WorkspaceContextValue = {
   isLoading: boolean;
   workspace: WorkspaceBootstrap | null;
@@ -77,6 +81,15 @@ type WorkspaceContextValue = {
   clearRestoredSandboxContext: () => void;
   consumeInjectedDecisionContext: () => string | null;
   setPendingCount: (topicId: string, count: number) => void;
+  // Cross-cutting view switching: lets a deep component (e.g. the IR detail
+  // action column) ask the shell to switch the Conversation/Truth-Graph view.
+  viewRequest: ViewRequest | null;
+  requestView: (view: WorkspaceViewName) => void;
+  // True while a "bring to sandbox" hand-off to the conversation is in flight,
+  // so the UI can show a blocking loading veil until the conversation is ready.
+  sandboxNavPending: boolean;
+  beginSandboxNav: () => void;
+  endSandboxNav: () => void;
 };
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -171,6 +184,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   );
   const [restoredSandboxContext, setRestoredSandboxContext] =
     useState<InjectedSandboxContext | null>(null);
+  const [viewRequest, setViewRequest] = useState<ViewRequest | null>(null);
+  const [sandboxNavPending, setSandboxNavPending] = useState(false);
   const [pendingCandidateCounts, setPendingCandidateCounts] =
     useState<PendingCandidateCounts>({});
 
@@ -500,6 +515,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }));
   }
 
+  function requestView(view: WorkspaceViewName) {
+    setViewRequest({ view, nonce: Date.now() });
+  }
+
+  function beginSandboxNav() {
+    setSandboxNavPending(true);
+  }
+
+  function endSandboxNav() {
+    setSandboxNavPending(false);
+  }
+
   const value: WorkspaceContextValue = {
     isLoading,
     workspace,
@@ -532,6 +559,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     clearRestoredSandboxContext,
     consumeInjectedDecisionContext,
     setPendingCount,
+    viewRequest,
+    requestView,
+    sandboxNavPending,
+    beginSandboxNav,
+    endSandboxNav,
   };
 
   return (

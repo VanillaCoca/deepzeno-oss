@@ -13,6 +13,7 @@ import { kindPresentation } from "@/components/ir/kind-presentation";
 import type { useIRActions } from "@/components/ir/use-ir-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { useWorkspace } from "@/components/workspace/workspace-provider";
 import type { IRDetail, IRNode } from "@/lib/ir/types";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,7 @@ function ActionItem({
   disabled,
   icon: Icon,
   label,
+  loading,
   onClick,
   primary,
   tone,
@@ -54,6 +56,7 @@ function ActionItem({
   disabled?: boolean;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   label: string;
+  loading?: boolean;
   onClick?: () => void;
   primary?: boolean;
   tone: ActionRole;
@@ -68,12 +71,16 @@ function ActionItem({
           "min-w-[104px] justify-center",
           primary && "font-semibold"
         )}
-        disabled={disabled}
+        disabled={disabled || loading}
         onClick={onClick}
         size="sm"
         variant={actionVariant(tone, primary)}
       >
-        <Icon className={cn("size-4", ACTION_ICON[tone])} />
+        {loading ? (
+          <Spinner className={cn("size-4", ACTION_ICON[tone])} />
+        ) : (
+          <Icon className={cn("size-4", ACTION_ICON[tone])} />
+        )}
         {label}
       </Button>
     </div>
@@ -230,6 +237,7 @@ function ActionColumn({
               disabled={actions.isMutating}
               icon={CheckIcon}
               label="Confirm"
+              loading={actions.pendingAction === "confirm"}
               onClick={() => actions.handleConfirmNode(selectedNode)}
               primary
               tone="confirm"
@@ -247,6 +255,7 @@ function ActionColumn({
             disabled={actions.isMutating}
             icon={XIcon}
             label="Dismiss"
+            loading={actions.pendingAction === "dismiss"}
             onClick={() => actions.handleDismissCandidate(selectedNode)}
             tone="neutral"
           />
@@ -265,6 +274,7 @@ function ActionColumn({
             disabled={actions.isMutating}
             icon={CircleDotIcon}
             label="Promote"
+            loading={actions.pendingAction === "promote"}
             onClick={() => actions.handlePromoteIdea(selectedNode)}
             primary
             tone="promote"
@@ -281,6 +291,7 @@ function ActionColumn({
             disabled={actions.isMutating}
             icon={XIcon}
             label="Ignore"
+            loading={actions.pendingAction === "dismiss"}
             onClick={() => actions.handleDismissIdea(selectedNode)}
             tone="neutral"
           />
