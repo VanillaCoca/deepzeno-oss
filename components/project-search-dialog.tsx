@@ -74,7 +74,7 @@ export function ProjectSearchDialog({
   return (
     <>
       <Dialog onOpenChange={onOpenChange} open={open}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[82vh] w-[92vw] gap-4 sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Search</DialogTitle>
             <DialogDescription>
@@ -111,7 +111,7 @@ export function ProjectSearchDialog({
             </p>
           ) : null}
 
-          <div className="max-h-[44vh] space-y-1 overflow-y-auto pr-1">
+          <div className="max-h-[60vh] min-h-[40vh] space-y-1 overflow-y-auto pr-1">
             {results === null ? (
               <p className="py-6 text-center text-sm text-muted-foreground">
                 Type a query and press Enter.

@@ -359,10 +359,10 @@ textarea:focus-visible {
    tokens so it adapts to dark/light automatically. */
 @keyframes z-text-shimmer {
   0% {
-    background-position: 150% 0;
+    background-position: -150% 0;
   }
   100% {
-    background-position: -50% 0;
+    background-position: 150% 0;
   }
 }
 
@@ -378,7 +378,7 @@ textarea:focus-visible {
   );
   background-repeat: no-repeat;
   background-size: 200% 100%;
-  background-position: 150% 0;
+  background-position: -150% 0;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;

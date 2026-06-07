@@ -121,7 +121,7 @@ export function QuickNotesDialog({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-h-[82vh] w-[92vw] gap-4 sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Quick Notes</DialogTitle>
           <DialogDescription>
@@ -130,7 +130,7 @@ export function QuickNotesDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[44vh] space-y-2 overflow-y-auto pr-1">
+        <div className="max-h-[60vh] min-h-[40vh] space-y-2 overflow-y-auto pr-1">
           {notes.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
               No notes yet.
