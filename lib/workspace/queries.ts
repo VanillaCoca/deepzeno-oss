@@ -560,8 +560,111 @@ export async function getProjectByIdForUser(projectId: string, userId: string) {
 // Ownership-scoped delete: the user_id filter ensures a user can only delete
 // their own project. Child rows (topics, ir_nodes, ir_edges, …) are removed by
 // the ON DELETE CASCADE foreign keys. Returns true when a row was deleted.
+// Several legacy tables reference a project (or its topics/conversations)
+// WITHOUT ON DELETE CASCADE, so deleting a project that has any conversation or
+// decision data would otherwise be blocked by a foreign-key constraint. We clear
+// those tables by hand, leaf-first, before removing the project itself (whose
+// remaining children — topics, conversations, ir_nodes, ir_edges, api_keys —
+// cascade automatically). Missing legacy tables are tolerated.
+async function clearProjectTable(
+  client: ReturnType<typeof getClient>,
+  table: string,
+  projectId: string
+) {
+  const { error } = await client
+    .from(table)
+    .delete()
+    .eq("project_id", projectId);
+
+  if (error && !isMissingTableError(error)) {
+    console.error(`Failed to clear ${table} for project ${projectId}`, error);
+    throw new ChatbotError(
+      "bad_request:database",
+      `Failed to delete ${table} for project`
+    );
+  }
+}
+
+async function selectProjectRowIds(
+  client: ReturnType<typeof getClient>,
+  table: string,
+  projectId: string
+): Promise<string[]> {
+  const { data, error } = await client
+    .from(table)
+    .select("id")
+    .eq("project_id", projectId);
+
+  if (error) {
+    if (isMissingTableError(error)) {
+      return [];
+    }
+    throw new ChatbotError(
+      "bad_request:database",
+      `Failed to load ${table} for project`
+    );
+  }
+
+  return ((data ?? []) as { id: string }[]).map((row) => row.id);
+}
+
+async function clearDecisionLog(
+  client: ReturnType<typeof getClient>,
+  column: "decision_id" | "candidate_id",
+  ids: string[]
+) {
+  if (ids.length === 0) {
+    return;
+  }
+
+  const { error } = await client.from("decision_log").delete().in(column, ids);
+
+  if (error && !isMissingTableError(error)) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to delete decision log for project"
+    );
+  }
+}
+
 export async function deleteProjectForUser(projectId: string, userId: string) {
   const client = getClient();
+
+  // Only the owner may delete; bail before touching anything otherwise.
+  const owned = await ensureResult(
+    client
+      .from("projects")
+      .select("id")
+      .eq("id", projectId)
+      .eq("user_id", userId),
+    "Failed to load project for delete"
+  );
+
+  if (!(Array.isArray(owned) && owned.length > 0)) {
+    return false;
+  }
+
+  // decision_log has no project_id — clear it via its decision/candidate parents.
+  const decisionIds = await selectProjectRowIds(client, "decisions", projectId);
+  const candidateIds = await selectProjectRowIds(
+    client,
+    "candidate_decisions",
+    projectId
+  );
+  await clearDecisionLog(client, "decision_id", decisionIds);
+  await clearDecisionLog(client, "candidate_id", candidateIds);
+
+  // Leaf-first so each delete's foreign keys are already gone.
+  for (const table of [
+    "ir_extraction_events",
+    "edges",
+    "candidate_decisions",
+    "decisions",
+    "messages",
+  ]) {
+    await clearProjectTable(client, table, projectId);
+  }
+
   const rows = await ensureResult(
     client
       .from("projects")
