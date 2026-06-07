@@ -17,7 +17,8 @@ export const Greeting = () => {
         initial={{ opacity: 0, y: 10 }}
         transition={{ delay: 0.5, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
-        Ask a question, clarify choices, or explore ideas.
+        Talk it through — ZENO turns your conversation into the decisions and
+        facts in your truth graph.
       </motion.div>
     </div>
   );

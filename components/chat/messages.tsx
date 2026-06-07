@@ -81,7 +81,8 @@ function PureMessages({
           {restoredSandboxContext && (
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-4 text-sm">
               <p className="font-medium text-foreground">
-                下一次对话会带入 {restoredSandboxContext.decisionTitle}
+                Your next message will include{" "}
+                {restoredSandboxContext.decisionTitle}
               </p>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">
                 {restoredSandboxContext.contextText}

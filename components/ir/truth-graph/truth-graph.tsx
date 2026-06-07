@@ -895,11 +895,9 @@ export function TruthGraph({
         <h2 className="font-semibold text-[15px] text-[var(--z-text)]">
           No truths yet
         </h2>
-        <p className="mt-2 max-w-md text-sm leading-[1.6] text-[var(--z-text-3)]">
-          This is your truth graph — a living map of the decisions, constraints,
-          and facts you've confirmed, linked by how they build on one another.
-          Talk things through in the conversation and confirm what matters; it
-          will appear here automatically.
+        <p className="mt-2 max-w-xs text-sm leading-[1.6] text-[var(--z-text-3)]">
+          Decisions and facts you confirm in the conversation appear here,
+          connected as a map.
         </p>
         {onStartConversation ? (
           <Button
