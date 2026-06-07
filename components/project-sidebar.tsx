@@ -8,7 +8,6 @@ import {
   MoonIcon,
   MoreHorizontalIcon,
   PlusIcon,
-  SparklesIcon,
   SunIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -49,6 +48,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { useWorkspace } from "@/components/workspace/workspace-provider";
+import { ZenoLogo } from "@/components/zeno-logo";
 import {
   createClient as createSupabaseClient,
   isSupabaseConfigured,
@@ -209,14 +209,9 @@ export function ProjectSidebar({ userEmail }: { userEmail: string | null }) {
               className="flex min-w-0 items-center gap-3 rounded-xl outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-sidebar-ring"
               href="/"
             >
-              <div className="flex size-9 items-center justify-center rounded-xl bg-sidebar-primary/10 text-sidebar-primary ring-1 ring-sidebar-border/60">
-                <SparklesIcon className="size-4" />
-              </div>
+              <ZenoLogo className="size-8 shrink-0 text-sidebar-foreground" />
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-sidebar-foreground">
-                  ZENO
-                </p>
-                <p className="truncate text-xs text-sidebar-foreground/60">
+                <p className="truncate text-sm font-medium text-sidebar-foreground">
                   {activeProjectName ?? "Project selection"}
                 </p>
               </div>
