@@ -13,6 +13,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useLocale } from "@/components/i18n/locale-provider";
 import { Button } from "@/components/ui/button";
 import { fitNodeTitle } from "@/lib/ir/fit-title";
 import type { IRNode } from "@/lib/ir/types";
@@ -786,6 +787,7 @@ export function TruthGraph({
   selectedNodeId,
   topics,
 }: TruthGraphProps) {
+  const { t } = useLocale();
   const model = useMemo(
     () => buildTruthGraphModel({ edges, nodes, topics }),
     [edges, nodes, topics]
@@ -893,11 +895,10 @@ export function TruthGraph({
           <Share2Icon className="size-6" />
         </div>
         <h2 className="font-semibold text-[15px] text-[var(--z-text)]">
-          No truths yet
+          {t("truth.emptyTitle")}
         </h2>
         <p className="mt-2 max-w-xs text-sm leading-[1.6] text-[var(--z-text-3)]">
-          Decisions and facts you confirm in the conversation appear here,
-          connected as a map.
+          {t("truth.emptyBody")}
         </p>
         {onStartConversation ? (
           <Button
@@ -907,7 +908,7 @@ export function TruthGraph({
             variant="secondary"
           >
             <MessageSquarePlusIcon className="size-4" />
-            Start a conversation
+            {t("truth.emptyCta")}
           </Button>
         ) : null}
       </div>

@@ -21,6 +21,7 @@ import { useDataStream } from "@/components/chat/data-stream-provider";
 import { getChatHistoryPaginationKey } from "@/components/chat/sidebar-history";
 import { toast } from "@/components/chat/toast";
 import type { VisibilityType } from "@/components/chat/visibility-selector";
+import { useLocale } from "@/components/i18n/locale-provider";
 import { useWorkspace } from "@/components/workspace/workspace-provider";
 import { useAutoResume } from "@/hooks/use-auto-resume";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
@@ -67,6 +68,14 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     sandboxNavPending,
     endSandboxNav,
   } = useWorkspace();
+  const { locale } = useLocale();
+
+  // Keep the latest locale in a ref so the transport closure always sends the
+  // current language without rebuilding the transport.
+  const localeRef = useRef(locale);
+  useEffect(() => {
+    localeRef.current = locale;
+  }, [locale]);
 
   const fallbackChatIdRef = useRef(generateUUID());
   const chatId = currentConversationId ?? fallbackChatIdRef.current;
@@ -251,6 +260,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
             injectedDecisionContext: isToolApprovalContinuation
               ? undefined
               : consumeInjectedDecisionContext(),
+            locale: localeRef.current,
             ...request.body,
           },
         };

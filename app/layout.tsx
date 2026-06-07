@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import { LocaleProvider } from "@/components/i18n/locale-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -74,17 +75,19 @@ export default function RootLayout({
           disableTransitionOnChange
           enableSystem
         >
-          <TooltipProvider>
-            <Toaster
-              position="top-center"
-              theme="system"
-              toastOptions={{
-                className:
-                  "!bg-card !text-foreground !border-border/50 !shadow-[var(--shadow-float)]",
-              }}
-            />
-            {children}
-          </TooltipProvider>
+          <LocaleProvider>
+            <TooltipProvider>
+              <Toaster
+                position="top-center"
+                theme="system"
+                toastOptions={{
+                  className:
+                    "!bg-card !text-foreground !border-border/50 !shadow-[var(--shadow-float)]",
+                }}
+              />
+              {children}
+            </TooltipProvider>
+          </LocaleProvider>
         </ThemeProvider>
       </body>
     </html>

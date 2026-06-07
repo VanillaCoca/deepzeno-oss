@@ -9,6 +9,7 @@ import {
   SparklesIcon,
 } from "lucide-react";
 import { useState } from "react";
+import { useLocale } from "@/components/i18n/locale-provider";
 import { useIR } from "@/components/ir/ir-provider";
 import {
   AlertDialog,
@@ -40,6 +41,7 @@ export function WorkspaceHeader({
   onOpenDrawer: () => void;
 }) {
   const { toggleSidebar } = useSidebar();
+  const { t } = useLocale();
   const { ideas, candidates } = useIR();
   const {
     activeTopic,
@@ -164,7 +166,9 @@ export function WorkspaceHeader({
               ) : (
                 <NetworkIcon className="size-3.5" />
               )}
-              {value === "conversation" ? "Conversation" : "Truth Graph"}
+              {value === "conversation"
+                ? t("view.conversation")
+                : t("view.truthGraph")}
             </Button>
           ))}
         </div>

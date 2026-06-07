@@ -4,6 +4,7 @@ import {
   ArchiveIcon,
   ChevronsUpDownIcon,
   HashIcon,
+  LanguagesIcon,
   LightbulbIcon,
   LockIcon,
   LogOutIcon,
@@ -18,6 +19,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useLocale } from "@/components/i18n/locale-provider";
 import { ProjectSearchDialog } from "@/components/project-search-dialog";
 import { QuickNotesDialog } from "@/components/quick-notes-dialog";
 import { Button } from "@/components/ui/button";
@@ -34,7 +36,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -52,6 +59,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useWorkspace } from "@/components/workspace/workspace-provider";
 import { ZenoLogo } from "@/components/zeno-logo";
+import { LOCALES, type Locale } from "@/lib/i18n/dictionaries";
 import {
   createClient as createSupabaseClient,
   isSupabaseConfigured,
@@ -71,6 +79,7 @@ function SidebarAccountMenu({
 }) {
   const [mounted, setMounted] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
+  const { locale, setLocale, t } = useLocale();
 
   useEffect(() => setMounted(true), []);
 
@@ -117,15 +126,34 @@ function SidebarAccountMenu({
           }}
         >
           {isDark ? <SunIcon /> : <MoonIcon />}
-          {isDark ? "Light mode" : "Dark mode"}
+          {isDark ? t("account.lightMode") : t("account.darkMode")}
         </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <LanguagesIcon />
+            {t("account.language")}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuRadioGroup
+              onValueChange={(value) => setLocale(value as Locale)}
+              value={locale}
+            >
+              {LOCALES.map((option) => (
+                <DropdownMenuRadioItem key={option.code} value={option.code}>
+                  {option.label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={isSigningOut}
           onSelect={() => onSignOut()}
           variant="destructive"
         >
           <LogOutIcon />
-          Log out
+          {t("account.logOut")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -134,6 +162,7 @@ function SidebarAccountMenu({
 
 export function ProjectSidebar({ userEmail }: { userEmail: string | null }) {
   const router = useRouter();
+  const { t } = useLocale();
   const {
     activeProjectId,
     activeTopicId,
@@ -216,7 +245,7 @@ export function ProjectSidebar({ userEmail }: { userEmail: string | null }) {
           </div>
           {/* Project title shows in full (wraps) — never truncated. */}
           <p className="mt-3 break-words font-semibold text-[15px] leading-snug text-sidebar-foreground">
-            {activeProjectName ?? "Project selection"}
+            {activeProjectName ?? t("nav.projectSelection")}
           </p>
         </SidebarHeader>
 
@@ -230,7 +259,7 @@ export function ProjectSidebar({ userEmail }: { userEmail: string | null }) {
                 type="button"
               >
                 <SearchIcon className="size-4 shrink-0 opacity-70" />
-                Search
+                {t("nav.search")}
               </button>
             </SidebarMenuItem>
             <SidebarMenuItem>
@@ -241,7 +270,7 @@ export function ProjectSidebar({ userEmail }: { userEmail: string | null }) {
                 type="button"
               >
                 <LightbulbIcon className="size-4 shrink-0 opacity-70" />
-                Quick Notes
+                {t("nav.quickNotes")}
               </button>
             </SidebarMenuItem>
           </SidebarMenu>
@@ -250,7 +279,7 @@ export function ProjectSidebar({ userEmail }: { userEmail: string | null }) {
 
           <SidebarGroup className="p-0">
             <SidebarGroupLabel className="px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/50">
-              Topics
+              {t("nav.topics")}
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="gap-0.5">
@@ -340,7 +369,7 @@ export function ProjectSidebar({ userEmail }: { userEmail: string | null }) {
                 type="button"
               >
                 <PlusIcon className="size-4 shrink-0" />
-                New topic
+                {t("nav.newTopic")}
               </button>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -355,7 +384,7 @@ export function ProjectSidebar({ userEmail }: { userEmail: string | null }) {
                   variant="ghost"
                 >
                   <ArchiveIcon className="size-3.5" />
-                  Archived ({archivedTopics.length})
+                  {t("nav.archived")} ({archivedTopics.length})
                 </Button>
                 {archivedOpen ? (
                   <SidebarMenu className="mt-0.5 gap-0.5">

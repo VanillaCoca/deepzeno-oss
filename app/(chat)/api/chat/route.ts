@@ -39,6 +39,7 @@ import {
 } from "@/lib/db/queries";
 import type { DBMessage } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
+import { localePromptName } from "@/lib/i18n/dictionaries";
 import { persistInlineIRMarkersForMessages } from "@/lib/ir/inline-markers";
 import { runIRSweep } from "@/lib/ir/sweep";
 import { buildDecisionContextBlock } from "@/lib/prompting";
@@ -115,6 +116,7 @@ export async function POST(request: Request) {
       conversationId,
       restoredContextMessageIds = [],
       injectedDecisionContext,
+      locale,
     } = requestBody;
     console.info("Chat API request received", {
       selectedChatModel,
@@ -316,7 +318,11 @@ export async function POST(request: Request) {
         const result = streamText({
           model: getLanguageModel(chatModel),
           system: [
-            systemPrompt({ requestHints, supportsTools }),
+            systemPrompt({
+              requestHints,
+              supportsTools,
+              languageName: locale ? localePromptName[locale] : undefined,
+            }),
             shouldInjectWorkspaceContext
               ? buildDecisionContextBlock(decisionContext)
               : "",

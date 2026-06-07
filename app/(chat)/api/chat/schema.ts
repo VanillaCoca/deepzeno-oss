@@ -37,6 +37,7 @@ export const postRequestBodySchema = z.object({
   conversationId: z.string().uuid(),
   restoredContextMessageIds: z.array(z.string().uuid()).optional(),
   injectedDecisionContext: z.string().max(12_000).nullish(),
+  locale: z.enum(["en", "zh", "fr"]).optional(),
 });
 
 export type PostRequestBody = z.infer<typeof postRequestBodySchema>;
