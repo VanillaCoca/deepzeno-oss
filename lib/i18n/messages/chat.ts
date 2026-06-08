@@ -7,6 +7,9 @@ export const chatMessages: LocaleMessages = {
     "chat.askAnything": "Ask anything...",
     "chat.searchModels": "Search models...",
     "chat.sandboxNextMessage": "Your next message will include {title}",
+    "chat.sandboxNextMessageHint":
+      "This node's structured content will be injected as context for the model.",
+    "chat.compactedDivider": "Earlier conversation summarized",
   },
   zh: {
     "chat.loadingWorkspace": "正在加载工作台…",
@@ -14,6 +17,9 @@ export const chatMessages: LocaleMessages = {
     "chat.askAnything": "问点什么…",
     "chat.searchModels": "搜索模型…",
     "chat.sandboxNextMessage": "下一条消息将包含 {title}",
+    "chat.sandboxNextMessageHint":
+      "这条节点的结构化内容会作为上下文注入给模型。",
+    "chat.compactedDivider": "已折叠并总结早期对话",
   },
   fr: {
     "chat.loadingWorkspace": "Chargement de l'espace de travail…",
@@ -21,5 +27,8 @@ export const chatMessages: LocaleMessages = {
     "chat.askAnything": "Posez votre question…",
     "chat.searchModels": "Rechercher des modèles…",
     "chat.sandboxNextMessage": "Votre prochain message inclura {title}",
+    "chat.sandboxNextMessageHint":
+      "Le contenu structuré de ce nœud sera injecté comme contexte pour le modèle.",
+    "chat.compactedDivider": "Conversation antérieure résumée",
   },
 };

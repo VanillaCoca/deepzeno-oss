@@ -50,6 +50,8 @@ type ActiveChatContextValue = {
   setCurrentModelId: (id: string) => void;
   showCreditCardAlert: boolean;
   setShowCreditCardAlert: Dispatch<SetStateAction<boolean>>;
+  // Id of the last message folded into the auto-compaction summary, if any.
+  compactedThroughMessageId: string | null;
 };
 
 const ActiveChatContext = createContext<ActiveChatContextValue | null>(null);
@@ -196,6 +198,8 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
 
   const initialMessages: ChatMessage[] = chatData?.messages ?? [];
   const visibility: VisibilityType = chatData?.visibility ?? "private";
+  const compactedThroughMessageId: string | null =
+    chatData?.compaction?.compactedThroughMessageId ?? null;
 
   // After a "bring to sandbox" hand-off, drop the blocking veil once the
   // conversation (with its prior history) is ready to use.
@@ -376,6 +380,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       setCurrentModelId,
       showCreditCardAlert,
       setShowCreditCardAlert,
+      compactedThroughMessageId,
     }),
     [
       chatId,
@@ -394,6 +399,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       currentModelId,
       setCurrentModelId,
       showCreditCardAlert,
+      compactedThroughMessageId,
     ]
   );
 

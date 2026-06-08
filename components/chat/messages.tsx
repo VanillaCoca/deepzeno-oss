@@ -1,6 +1,6 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { ArrowDownIcon } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { useLocale } from "@/components/i18n/locale-provider";
 import { useWorkspace } from "@/components/workspace/workspace-provider";
 import { useMessages } from "@/hooks/use-messages";
@@ -24,7 +24,18 @@ type MessagesProps = {
   isLoading?: boolean;
   selectedModelId: string;
   onEditMessage?: (message: ChatMessage) => void;
+  compactedThroughMessageId?: string | null;
 };
+
+function CompactionDivider({ label }: { label: string }) {
+  return (
+    <div className="flex select-none items-center gap-3 py-1 text-[11px] text-muted-foreground/45">
+      <div className="h-px flex-1 bg-border/40" />
+      <span>{label}</span>
+      <div className="h-px flex-1 bg-border/40" />
+    </div>
+  );
+}
 
 function PureMessages({
   addToolApprovalResponse,
@@ -39,6 +50,7 @@ function PureMessages({
   isLoading,
   selectedModelId: _selectedModelId,
   onEditMessage,
+  compactedThroughMessageId,
 }: MessagesProps) {
   const { restoredSandboxContext } = useWorkspace();
   const { t } = useLocale();
@@ -94,27 +106,32 @@ function PureMessages({
           )}
 
           {messages.map((message, index) => (
-            <PreviewMessage
-              addToolApprovalResponse={addToolApprovalResponse}
-              chatId={chatId}
-              isLoading={
-                status === "streaming" && messages.length - 1 === index
-              }
-              isReadonly={isReadonly}
-              key={message.id}
-              message={message}
-              onEdit={onEditMessage}
-              regenerate={regenerate}
-              requiresScrollPadding={
-                hasSentMessage && index === messages.length - 1
-              }
-              setMessages={setMessages}
-              vote={
-                votes
-                  ? votes.find((vote) => vote.messageId === message.id)
-                  : undefined
-              }
-            />
+            <Fragment key={message.id}>
+              <PreviewMessage
+                addToolApprovalResponse={addToolApprovalResponse}
+                chatId={chatId}
+                isLoading={
+                  status === "streaming" && messages.length - 1 === index
+                }
+                isReadonly={isReadonly}
+                message={message}
+                onEdit={onEditMessage}
+                regenerate={regenerate}
+                requiresScrollPadding={
+                  hasSentMessage && index === messages.length - 1
+                }
+                setMessages={setMessages}
+                vote={
+                  votes
+                    ? votes.find((vote) => vote.messageId === message.id)
+                    : undefined
+                }
+              />
+              {compactedThroughMessageId === message.id &&
+                index < messages.length - 1 && (
+                  <CompactionDivider label={t("chat.compactedDivider")} />
+                )}
+            </Fragment>
           ))}
 
           {status === "submitted" && messages.at(-1)?.role !== "assistant" && (
