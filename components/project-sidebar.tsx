@@ -10,6 +10,7 @@ import {
   LogOutIcon,
   MoonIcon,
   MoreHorizontalIcon,
+  PencilIcon,
   PlusIcon,
   SearchIcon,
   SunIcon,
@@ -171,6 +172,8 @@ export function ProjectSidebar({ userEmail }: { userEmail: string | null }) {
     isLoading,
     pendingCandidateCounts,
     projects,
+    renameProject,
+    renameTopic,
     selectTopic,
     topics,
   } = useWorkspace();
@@ -180,6 +183,10 @@ export function ProjectSidebar({ userEmail }: { userEmail: string | null }) {
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<
+    { kind: "topic"; id: string } | { kind: "project"; id: string } | null
+  >(null);
+  const [renameDraft, setRenameDraft] = useState("");
 
   const activeTopics = useMemo(
     () => topics.filter((topic) => !topic.archivedAt),
@@ -226,6 +233,26 @@ export function ProjectSidebar({ userEmail }: { userEmail: string | null }) {
     }
   }
 
+  async function submitRename() {
+    const trimmed = renameDraft.trim();
+    if (!(renameTarget && trimmed)) {
+      return;
+    }
+
+    try {
+      if (renameTarget.kind === "topic") {
+        await renameTopic(renameTarget.id, trimmed);
+      } else {
+        await renameProject(renameTarget.id, trimmed);
+      }
+      setRenameTarget(null);
+      setRenameDraft("");
+    } catch (error) {
+      console.error(error);
+      toast.error(t("rename.failed"));
+    }
+  }
+
   return (
     <>
       <Sidebar
@@ -244,9 +271,24 @@ export function ProjectSidebar({ userEmail }: { userEmail: string | null }) {
             <SidebarTrigger className="md:hidden" />
           </div>
           {/* Project title shows in full (wraps) — never truncated. */}
-          <p className="mt-3 break-words font-semibold text-[15px] leading-snug text-sidebar-foreground">
-            {activeProjectName ?? t("nav.projectSelection")}
-          </p>
+          <div className="group/title mt-3 flex items-start gap-1.5">
+            <p className="break-words font-semibold text-[15px] leading-snug text-sidebar-foreground">
+              {activeProjectName ?? t("nav.projectSelection")}
+            </p>
+            {activeProjectId ? (
+              <button
+                aria-label={t("rename.projectTitle")}
+                className="mt-1 shrink-0 text-sidebar-foreground/40 opacity-0 transition-opacity hover:text-sidebar-foreground focus-visible:opacity-100 group-hover/title:opacity-100"
+                onClick={() => {
+                  setRenameTarget({ kind: "project", id: activeProjectId });
+                  setRenameDraft(activeProjectName ?? "");
+                }}
+                type="button"
+              >
+                <PencilIcon className="size-3.5" />
+              </button>
+            ) : null}
+          </div>
         </SidebarHeader>
 
         <SidebarContent className="gap-0 px-2 py-3">
@@ -346,6 +388,18 @@ export function ProjectSidebar({ userEmail }: { userEmail: string | null }) {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" side="right">
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                setRenameTarget({
+                                  kind: "topic",
+                                  id: topic.id,
+                                });
+                                setRenameDraft(topic.label);
+                              }}
+                            >
+                              <PencilIcon className="size-4" />
+                              {t("rename.menu")}
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                               onSelect={() => {
                                 archiveTopic(topic.id).catch(console.error);
@@ -455,6 +509,45 @@ export function ProjectSidebar({ userEmail }: { userEmail: string | null }) {
 
       <ProjectSearchDialog onOpenChange={setSearchOpen} open={searchOpen} />
       <QuickNotesDialog onOpenChange={setNotesOpen} open={notesOpen} />
+
+      <Dialog
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            setRenameTarget(null);
+            setRenameDraft("");
+          }
+        }}
+        open={Boolean(renameTarget)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {renameTarget?.kind === "project"
+                ? t("rename.projectTitle")
+                : t("rename.topicTitle")}
+            </DialogTitle>
+          </DialogHeader>
+          <Input
+            onChange={(event) => setRenameDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                submitRename();
+              }
+            }}
+            placeholder={
+              renameTarget?.kind === "project"
+                ? t("rename.projectPlaceholder")
+                : t("rename.topicPlaceholder")
+            }
+            value={renameDraft}
+          />
+          <DialogFooter>
+            <Button disabled={!renameDraft.trim()} onClick={submitRename}>
+              {t("rename.save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

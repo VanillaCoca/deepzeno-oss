@@ -514,7 +514,7 @@ function PureMultimodalInput({
 
       <PromptInput
         className={cn(
-          "[&>div]:rounded-2xl [&>div]:border [&>div]:border-border/30 [&>div]:bg-card/70 [&>div]:shadow-[var(--shadow-composer)] [&>div]:transition-shadow [&>div]:duration-300 [&>div]:focus-within:shadow-[var(--shadow-composer-focus)]",
+          "[&>div]:rounded-2xl [&>div]:border [&>div]:border-border/30 [&>div]:bg-card/70 [&>div]:shadow-[var(--shadow-composer)] [&>div]:transition-shadow [&>div]:duration-300",
           shouldHighlightInput &&
             "[&>div]:ring-2 [&>div]:ring-foreground/15 [&>div]:shadow-[var(--shadow-composer-focus)]"
         )}

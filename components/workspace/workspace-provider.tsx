@@ -61,6 +61,8 @@ type WorkspaceContextValue = {
   createProject: (name: string) => Promise<void>;
   createTopic: (label: string) => Promise<void>;
   archiveTopic: (topicId: string) => Promise<void>;
+  renameTopic: (topicId: string, label: string) => Promise<void>;
+  renameProject: (projectId: string, name: string) => Promise<void>;
   clearConversation: () => Promise<void>;
   goBack: () => void;
   goForward: () => void;
@@ -388,6 +390,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  async function renameTopic(topicId: string, label: string) {
+    const payload = await postWorkspaceUpdate(
+      `/api/workspace/topics/${topicId}/rename`,
+      { label }
+    );
+    await mutate(payload, false);
+  }
+
+  async function renameProject(projectId: string, name: string) {
+    const payload = await postWorkspaceUpdate(
+      `/api/workspace/projects/${projectId}/rename`,
+      { name }
+    );
+    await mutate(payload, false);
+  }
+
   async function clearConversation() {
     if (!activeTopicId) {
       return;
@@ -545,6 +563,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     createProject,
     createTopic,
     archiveTopic,
+    renameTopic,
+    renameProject,
     clearConversation,
     goBack,
     goForward,

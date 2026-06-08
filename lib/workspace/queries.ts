@@ -791,6 +791,63 @@ export async function updateTopicDefaultModelForUser({
   return mapTopic(row as DatabaseRecord);
 }
 
+export async function renameTopicForUser({
+  userId,
+  topicId,
+  label,
+}: {
+  userId: string;
+  topicId: string;
+  label: string;
+}) {
+  const topic = await getTopicByIdForUser(topicId, userId);
+
+  if (!topic) {
+    throw new ChatbotError("forbidden:chat", "Topic not found");
+  }
+
+  const row = await ensureResult(
+    getClient()
+      .from("topics")
+      .update({ label })
+      .eq("id", topicId)
+      .select("*")
+      .single(),
+    "Failed to rename topic"
+  );
+
+  return mapTopic(row as DatabaseRecord);
+}
+
+export async function renameProjectForUser({
+  userId,
+  projectId,
+  name,
+}: {
+  userId: string;
+  projectId: string;
+  name: string;
+}) {
+  const project = await getProjectByIdForUser(projectId, userId);
+
+  if (!project) {
+    throw new ChatbotError("forbidden:chat", "Project not found");
+  }
+
+  const row = await ensureResult(
+    getClient()
+      .from("projects")
+      .update({ name })
+      .eq("id", projectId)
+      .eq("user_id", userId)
+      .select("*")
+      .single(),
+    "Failed to rename project"
+  );
+
+  return mapProject(row as DatabaseRecord);
+}
+
 export async function createTopicForProject({
   projectId,
   label,
