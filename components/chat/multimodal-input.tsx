@@ -881,19 +881,21 @@ function PureModelSelectorCompact({
       <ModelSelectorContent>
         <ModelSelectorInput placeholder={t("chat.searchModels")} />
         <ModelSelectorList>
-          <ModelSelectorItem
-            className="flex w-full"
-            data-testid="model-selector-item"
-            key="auto"
-            onClick={() => handleModelSelect("auto")}
-            onSelect={() => handleModelSelect("auto")}
-            value="auto"
-          >
-            <ModelSelectorName>{t("chat.autoModel")}</ModelSelectorName>
-            <span className="ml-auto text-[11px] text-muted-foreground">
-              {t("chat.autoModelHint")}
-            </span>
-          </ModelSelectorItem>
+          <ModelSelectorGroup>
+            <ModelSelectorItem
+              className="flex w-full"
+              data-testid="model-selector-item"
+              key="auto"
+              onClick={() => handleModelSelect("auto")}
+              onSelect={() => handleModelSelect("auto")}
+              value="auto"
+            >
+              <ModelSelectorName>{t("chat.autoModel")}</ModelSelectorName>
+              <span className="ml-auto text-[11px] text-muted-foreground">
+                {t("chat.autoModelHint")}
+              </span>
+            </ModelSelectorItem>
+          </ModelSelectorGroup>
           {(() => {
             const allModels = dynamicModels ?? chatModels;
             const grouped: Record<string, ChatModel[]> = {};
