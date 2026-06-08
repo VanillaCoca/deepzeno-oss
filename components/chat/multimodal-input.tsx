@@ -818,7 +818,13 @@ function PureModelSelectorCompact({
 
   const handleModelSelect = useCallback(
     (modelId: string) => {
-      if (selectingModelRef.current === modelId) {
+      // Re-selecting the current model (or one already being switched to) is a
+      // no-op: just close the menu, no save / no switching animation.
+      if (
+        modelId === selectedModelId ||
+        selectingModelRef.current === modelId
+      ) {
+        setOpen(false);
         return;
       }
 
@@ -867,7 +873,13 @@ function PureModelSelectorCompact({
           onSwitchingChange?.(false);
         });
     },
-    [activeTopicId, onModelChange, onSwitchingChange, refreshWorkspace]
+    [
+      activeTopicId,
+      onModelChange,
+      onSwitchingChange,
+      refreshWorkspace,
+      selectedModelId,
+    ]
   );
 
   if (!(selectedModel || isAuto)) {
