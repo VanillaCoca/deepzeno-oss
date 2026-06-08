@@ -5,6 +5,7 @@ import { LocaleProvider } from "@/components/i18n/locale-provider";
 import { QualityProvider } from "@/components/quality/quality-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { getServerLocale } from "@/lib/i18n/server";
 
 import "./globals.css";
 
@@ -50,15 +51,17 @@ const THEME_COLOR_SCRIPT = `\
   updateThemeColor();
 })();`;
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getServerLocale();
+
   return (
     <html
       className={`${geist.variable} ${geistMono.variable}`}
-      lang="en"
+      lang={locale}
       suppressHydrationWarning
     >
       <head>
@@ -76,7 +79,7 @@ export default function RootLayout({
           disableTransitionOnChange
           enableSystem
         >
-          <LocaleProvider>
+          <LocaleProvider initialLocale={locale}>
             <QualityProvider>
               <TooltipProvider>
                 <Toaster
