@@ -71,12 +71,8 @@
           "name": "api_keys_project_id_projects_id_fk",
           "tableFrom": "api_keys",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -86,9 +82,7 @@
         "api_keys_key_hash_unique": {
           "name": "api_keys_key_hash_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "key_hash"
-          ]
+          "columns": ["key_hash"]
         }
       }
     },
@@ -260,12 +254,8 @@
           "name": "candidate_decisions_project_id_projects_id_fk",
           "tableFrom": "candidate_decisions",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -273,12 +263,8 @@
           "name": "candidate_decisions_topic_id_topics_id_fk",
           "tableFrom": "candidate_decisions",
           "tableTo": "topics",
-          "columnsFrom": [
-            "topic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["topic_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -286,12 +272,8 @@
           "name": "candidate_decisions_conversation_id_conversations_id_fk",
           "tableFrom": "candidate_decisions",
           "tableTo": "conversations",
-          "columnsFrom": [
-            "conversation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["conversation_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -299,12 +281,8 @@
           "name": "candidate_decisions_message_id_messages_id_fk",
           "tableFrom": "candidate_decisions",
           "tableTo": "messages",
-          "columnsFrom": [
-            "message_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["message_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -312,12 +290,8 @@
           "name": "candidate_decisions_proposed_for_decision_id_decisions_id_fk",
           "tableFrom": "candidate_decisions",
           "tableTo": "decisions",
-          "columnsFrom": [
-            "proposed_for_decision_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["proposed_for_decision_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -325,12 +299,8 @@
           "name": "candidate_decisions_resolved_decision_id_decisions_id_fk",
           "tableFrom": "candidate_decisions",
           "tableTo": "decisions",
-          "columnsFrom": [
-            "resolved_decision_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["resolved_decision_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -423,12 +393,8 @@
           "name": "chat_session_state_chat_session_id_conversations_id_fk",
           "tableFrom": "chat_session_state",
           "tableTo": "conversations",
-          "columnsFrom": [
-            "chat_session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chat_session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -436,12 +402,8 @@
           "name": "chat_session_state_reactivation_anchor_id_ir_nodes_id_fk",
           "tableFrom": "chat_session_state",
           "tableTo": "ir_nodes",
-          "columnsFrom": [
-            "reactivation_anchor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["reactivation_anchor_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -492,12 +454,8 @@
           "name": "conversations_topic_id_topics_id_fk",
           "tableFrom": "conversations",
           "tableTo": "topics",
-          "columnsFrom": [
-            "topic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["topic_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -505,12 +463,8 @@
           "name": "conversations_project_id_projects_id_fk",
           "tableFrom": "conversations",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -632,12 +586,8 @@
           "name": "decisions_project_id_projects_id_fk",
           "tableFrom": "decisions",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -645,12 +595,8 @@
           "name": "decisions_topic_id_topics_id_fk",
           "tableFrom": "decisions",
           "tableTo": "topics",
-          "columnsFrom": [
-            "topic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["topic_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -658,12 +604,8 @@
           "name": "decisions_created_from_message_id_messages_id_fk",
           "tableFrom": "decisions",
           "tableTo": "messages",
-          "columnsFrom": [
-            "created_from_message_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_from_message_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -727,12 +669,8 @@
           "name": "decision_log_decision_id_decisions_id_fk",
           "tableFrom": "decision_log",
           "tableTo": "decisions",
-          "columnsFrom": [
-            "decision_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["decision_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -740,12 +678,8 @@
           "name": "decision_log_candidate_id_candidate_decisions_id_fk",
           "tableFrom": "decision_log",
           "tableTo": "candidate_decisions",
-          "columnsFrom": [
-            "candidate_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["candidate_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -801,10 +735,7 @@
       "compositePrimaryKeys": {
         "Document_id_createdAt_pk": {
           "name": "Document_id_createdAt_pk",
-          "columns": [
-            "id",
-            "createdAt"
-          ]
+          "columns": ["id", "createdAt"]
         }
       },
       "uniqueConstraints": {}
@@ -864,12 +795,8 @@
           "name": "edges_project_id_projects_id_fk",
           "tableFrom": "edges",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -877,12 +804,8 @@
           "name": "edges_topic_id_topics_id_fk",
           "tableFrom": "edges",
           "tableTo": "topics",
-          "columnsFrom": [
-            "topic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["topic_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -890,12 +813,8 @@
           "name": "edges_source_decision_id_decisions_id_fk",
           "tableFrom": "edges",
           "tableTo": "decisions",
-          "columnsFrom": [
-            "source_decision_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["source_decision_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -903,12 +822,8 @@
           "name": "edges_target_decision_id_decisions_id_fk",
           "tableFrom": "edges",
           "tableTo": "decisions",
-          "columnsFrom": [
-            "target_decision_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["target_decision_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -985,12 +900,8 @@
           "name": "ir_edges_project_id_projects_id_fk",
           "tableFrom": "ir_edges",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -998,12 +909,8 @@
           "name": "ir_edges_from_node_ir_nodes_id_fk",
           "tableFrom": "ir_edges",
           "tableTo": "ir_nodes",
-          "columnsFrom": [
-            "from_node"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["from_node"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1011,12 +918,8 @@
           "name": "ir_edges_to_node_ir_nodes_id_fk",
           "tableFrom": "ir_edges",
           "tableTo": "ir_nodes",
-          "columnsFrom": [
-            "to_node"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["to_node"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1092,12 +995,8 @@
           "name": "ir_extraction_events_project_id_projects_id_fk",
           "tableFrom": "ir_extraction_events",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1105,12 +1004,8 @@
           "name": "ir_extraction_events_topic_id_topics_id_fk",
           "tableFrom": "ir_extraction_events",
           "tableTo": "topics",
-          "columnsFrom": [
-            "topic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["topic_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -1118,12 +1013,8 @@
           "name": "ir_extraction_events_node_id_ir_nodes_id_fk",
           "tableFrom": "ir_extraction_events",
           "tableTo": "ir_nodes",
-          "columnsFrom": [
-            "node_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["node_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1131,12 +1022,8 @@
           "name": "ir_extraction_events_edge_id_ir_edges_id_fk",
           "tableFrom": "ir_extraction_events",
           "tableTo": "ir_edges",
-          "columnsFrom": [
-            "edge_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["edge_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1307,12 +1194,8 @@
           "name": "ir_nodes_project_id_projects_id_fk",
           "tableFrom": "ir_nodes",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1320,12 +1203,8 @@
           "name": "ir_nodes_topic_id_topics_id_fk",
           "tableFrom": "ir_nodes",
           "tableTo": "topics",
-          "columnsFrom": [
-            "topic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["topic_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -1333,12 +1212,8 @@
           "name": "ir_nodes_parent_id_ir_nodes_id_fk",
           "tableFrom": "ir_nodes",
           "tableTo": "ir_nodes",
-          "columnsFrom": [
-            "parent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["parent_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1394,12 +1269,8 @@
           "name": "Message_v2_chatId_Chat_id_fk",
           "tableFrom": "Message_v2",
           "tableTo": "Chat",
-          "columnsFrom": [
-            "chatId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chatId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1480,12 +1351,8 @@
           "name": "project_user_view_state_project_id_projects_id_fk",
           "tableFrom": "project_user_view_state",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1493,10 +1360,7 @@
       "compositePrimaryKeys": {
         "project_user_view_state_user_id_project_id_pk": {
           "name": "project_user_view_state_user_id_project_id_pk",
-          "columns": [
-            "user_id",
-            "project_id"
-          ]
+          "columns": ["user_id", "project_id"]
         }
       },
       "uniqueConstraints": {}
@@ -1531,12 +1395,8 @@
           "name": "Stream_chatId_Chat_id_fk",
           "tableFrom": "Stream",
           "tableTo": "Chat",
-          "columnsFrom": [
-            "chatId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chatId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1544,9 +1404,7 @@
       "compositePrimaryKeys": {
         "Stream_id_pk": {
           "name": "Stream_id_pk",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {}
@@ -1618,14 +1476,8 @@
           "name": "Suggestion_documentId_documentCreatedAt_Document_id_createdAt_fk",
           "tableFrom": "Suggestion",
           "tableTo": "Document",
-          "columnsFrom": [
-            "documentId",
-            "documentCreatedAt"
-          ],
-          "columnsTo": [
-            "id",
-            "createdAt"
-          ],
+          "columnsFrom": ["documentId", "documentCreatedAt"],
+          "columnsTo": ["id", "createdAt"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1633,9 +1485,7 @@
       "compositePrimaryKeys": {
         "Suggestion_id_pk": {
           "name": "Suggestion_id_pk",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {}
@@ -1740,12 +1590,8 @@
           "name": "topics_project_id_projects_id_fk",
           "tableFrom": "topics",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1830,12 +1676,8 @@
           "name": "topic_relations_project_id_projects_id_fk",
           "tableFrom": "topic_relations",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1843,12 +1685,8 @@
           "name": "topic_relations_from_topic_id_topics_id_fk",
           "tableFrom": "topic_relations",
           "tableTo": "topics",
-          "columnsFrom": [
-            "from_topic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["from_topic_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1856,12 +1694,8 @@
           "name": "topic_relations_to_topic_id_topics_id_fk",
           "tableFrom": "topic_relations",
           "tableTo": "topics",
-          "columnsFrom": [
-            "to_topic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["to_topic_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1898,12 +1732,8 @@
           "name": "Vote_v2_chatId_Chat_id_fk",
           "tableFrom": "Vote_v2",
           "tableTo": "Chat",
-          "columnsFrom": [
-            "chatId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chatId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1911,12 +1741,8 @@
           "name": "Vote_v2_messageId_Message_v2_id_fk",
           "tableFrom": "Vote_v2",
           "tableTo": "Message_v2",
-          "columnsFrom": [
-            "messageId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["messageId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1924,10 +1750,7 @@
       "compositePrimaryKeys": {
         "Vote_v2_chatId_messageId_pk": {
           "name": "Vote_v2_chatId_messageId_pk",
-          "columns": [
-            "chatId",
-            "messageId"
-          ]
+          "columns": ["chatId", "messageId"]
         }
       },
       "uniqueConstraints": {}
@@ -1993,12 +1816,8 @@
           "name": "messages_conversation_id_conversations_id_fk",
           "tableFrom": "messages",
           "tableTo": "conversations",
-          "columnsFrom": [
-            "conversation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["conversation_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2006,12 +1825,8 @@
           "name": "messages_topic_id_topics_id_fk",
           "tableFrom": "messages",
           "tableTo": "topics",
-          "columnsFrom": [
-            "topic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["topic_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2019,12 +1834,8 @@
           "name": "messages_project_id_projects_id_fk",
           "tableFrom": "messages",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
