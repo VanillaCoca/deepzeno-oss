@@ -5,10 +5,12 @@
  * themes: set the text color on the element (we use `text-sidebar-foreground`)
  * and the mark is black in light mode / white in dark mode — no second asset.
  *
- * The mask (`public/zeno-logo-mask.png`) is a tight alpha silhouette derived
- * pixel-for-pixel from the supplied logo, so the shape is exact. To refresh it
- * after a logo change, re-run the binarize→trim→alpha step against the source
- * art; the component wiring below never needs to change.
+ * The mask (`public/zeno-logo-mask.png`) is a bold profile silhouette built
+ * from the source art (`public/zeno-logo2.png`): flood-fill the line-art
+ * outline into a solid shape, then carve a few key interior strokes back out
+ * as negative space so it stays legible at 24-28px. Regenerate with sharp
+ * (alpha → seal → flood-fill → carve → tight-crop) after a logo change; the
+ * component wiring below never changes.
  */
 const MASK_URL = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/zeno-logo-mask.png`;
 

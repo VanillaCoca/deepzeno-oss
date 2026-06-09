@@ -294,7 +294,7 @@ export function ProjectSidebar({ userEmail }: { userEmail: string | null }) {
                 className="rounded-lg outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:group-hover/brand:opacity-0"
                 href="/"
               >
-                <ZenoLogo className="size-6 text-sidebar-foreground" />
+                <ZenoLogo className="size-7 text-sidebar-foreground" />
               </Link>
               {/* Expand control — only present in the collapsed rail, on hover. */}
               <SidebarTrigger
