@@ -908,76 +908,87 @@ function PureModelSelectorCompact({
   }
 
   return (
-    <ModelSelector onOpenChange={setOpen} open={open}>
-      <ModelSelectorTrigger asChild>
-        <Button
-          className="h-7 max-w-[200px] justify-between gap-1.5 rounded-lg px-2 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
-          data-testid="model-selector"
-          variant="ghost"
-        >
-          {isSwitching ? (
-            <>
-              <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
-              <ModelSelectorName className="animate-pulse text-muted-foreground">
-                {isAuto
-                  ? t("chat.autoModel")
-                  : displayModelName(selectedModel?.name)}
-              </ModelSelectorName>
-            </>
-          ) : isAuto ? (
-            <ModelSelectorName>{t("chat.autoModel")}</ModelSelectorName>
-          ) : (
-            <>
-              <ModelSelectorLogo provider={selectedModel?.provider} />
-              <ModelSelectorName>
-                {displayModelName(selectedModel?.name)}
-              </ModelSelectorName>
-            </>
-          )}
-        </Button>
-      </ModelSelectorTrigger>
-      <ModelSelectorContent>
-        {/* Auto is a plain button (not a cmdk item) so it is always clickable. */}
-        <button
-          className="mx-1 mt-1 flex items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-foreground transition-colors hover:bg-muted/50"
-          data-testid="model-selector-auto"
-          onClick={() => handleModelSelect("auto")}
-          type="button"
-        >
-          <span className="flex-1 truncate">{t("chat.autoModel")}</span>
-          <span className="text-[11px] text-muted-foreground">
-            {t("chat.autoModelHint")}
-          </span>
-        </button>
-        <ModelSelectorList>
-          {/* Flat list — no per-vendor headings; the logo conveys the vendor. */}
-          <ModelSelectorGroup>
-            {(dynamicModels ?? chatModels).map((model) => (
-              <ModelSelectorItem
-                className={cn(
-                  "flex w-full",
-                  model.id === selectedModel?.id &&
-                    "border-b border-dashed border-foreground/50"
-                )}
-                data-testid="model-selector-item"
-                key={model.id}
-                onClick={() => handleModelSelect(model.id)}
-                onSelect={() => handleModelSelect(model.id)}
-                value={model.id}
-              >
-                <ModelSelectorLogo provider={model.provider} />
-                <ModelSelectorName>
-                  {displayModelName(model.name)}
+    <>
+      {/* Keep every vendor logo mounted + cached so the menu shows them
+          instantly — without this they fetch only when the menu first opens,
+          giving a brief flash of missing logos. */}
+      <span aria-hidden className="hidden">
+        {Array.from(
+          new Set((dynamicModels ?? chatModels).map((m) => m.provider))
+        ).map((provider) => (
+          <ModelSelectorLogo key={provider} provider={provider} />
+        ))}
+      </span>
+      <ModelSelector onOpenChange={setOpen} open={open}>
+        <ModelSelectorTrigger asChild>
+          <Button
+            className="h-7 max-w-[200px] justify-between gap-1.5 rounded-lg px-2 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
+            data-testid="model-selector"
+            variant="ghost"
+          >
+            {isSwitching ? (
+              <>
+                <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
+                <ModelSelectorName className="animate-pulse text-muted-foreground">
+                  {isAuto
+                    ? t("chat.autoModel")
+                    : displayModelName(selectedModel?.name)}
                 </ModelSelectorName>
-                {capabilities?.[model.id]?.reasoning && (
-                  <BrainIcon className="ml-auto size-3.5 text-foreground/70" />
-                )}
-              </ModelSelectorItem>
-            ))}
-          </ModelSelectorGroup>
-        </ModelSelectorList>
-      </ModelSelectorContent>
-    </ModelSelector>
+              </>
+            ) : isAuto ? (
+              <ModelSelectorName>{t("chat.autoModel")}</ModelSelectorName>
+            ) : (
+              <>
+                <ModelSelectorLogo provider={selectedModel?.provider} />
+                <ModelSelectorName>
+                  {displayModelName(selectedModel?.name)}
+                </ModelSelectorName>
+              </>
+            )}
+          </Button>
+        </ModelSelectorTrigger>
+        <ModelSelectorContent>
+          {/* Auto is a plain button (not a cmdk item) so it is always clickable. */}
+          <button
+            className="mx-1 mt-1 flex items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-foreground transition-colors hover:bg-muted/50"
+            data-testid="model-selector-auto"
+            onClick={() => handleModelSelect("auto")}
+            type="button"
+          >
+            <span className="flex-1 truncate">{t("chat.autoModel")}</span>
+            <span className="text-[11px] text-muted-foreground">
+              {t("chat.autoModelHint")}
+            </span>
+          </button>
+          <ModelSelectorList>
+            {/* Flat list — no per-vendor headings; the logo conveys the vendor. */}
+            <ModelSelectorGroup>
+              {(dynamicModels ?? chatModels).map((model) => (
+                <ModelSelectorItem
+                  className={cn(
+                    "flex w-full",
+                    model.id === selectedModel?.id && "bg-muted/50"
+                  )}
+                  data-testid="model-selector-item"
+                  key={model.id}
+                  onClick={() => handleModelSelect(model.id)}
+                  onSelect={() => handleModelSelect(model.id)}
+                  value={model.id}
+                >
+                  <ModelSelectorLogo provider={model.provider} />
+                  <ModelSelectorName>
+                    {displayModelName(model.name)}
+                  </ModelSelectorName>
+                  {capabilities?.[model.id]?.reasoning && (
+                    <BrainIcon className="ml-auto size-3.5 text-foreground/70" />
+                  )}
+                </ModelSelectorItem>
+              ))}
+            </ModelSelectorGroup>
+          </ModelSelectorList>
+        </ModelSelectorContent>
+      </ModelSelector>
+    </>
   );
 }
 
