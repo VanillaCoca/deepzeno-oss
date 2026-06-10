@@ -69,17 +69,34 @@ type LocaleContextValue = {
 
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
-export function LocaleProvider({ children }: { children: React.ReactNode }) {
-  // Start from the default so the server and the first client render match;
-  // read the stored choice after mount (avoids a hydration mismatch).
-  const [locale, setLocaleState] = useState<Locale>(defaultLocale);
+export function LocaleProvider({
+  children,
+  initialLocale,
+}: {
+  children: React.ReactNode;
+  // The locale read from the cookie on the server. When provided, the server
+  // renders in this language AND the client's first render starts here, so they
+  // match even for client components that hydrate late under streaming (the
+  // homepage cards). Falls back to the default when there's no cookie yet.
+  initialLocale?: Locale;
+}) {
+  const [locale, setLocaleState] = useState<Locale>(
+    initialLocale ?? defaultLocale
+  );
 
   useEffect(() => {
+    // Reconcile with localStorage only when the server didn't already seed a
+    // locale (e.g. first visit before the cookie exists). When initialLocale is
+    // set, cookie and localStorage are in sync, so this is a no-op and never
+    // causes a post-hydration flip.
+    if (initialLocale) {
+      return;
+    }
     const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
     if (isLocale(stored)) {
       setLocaleState(stored);
     }
-  }, []);
+  }, [initialLocale]);
 
   const value = useMemo<LocaleContextValue>(() => {
     return {

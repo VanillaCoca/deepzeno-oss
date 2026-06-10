@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Averia_Serif_Libre, Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from "react";
 import { Toaster } from "sonner";
 import { LocaleProvider } from "@/components/i18n/locale-provider";
 import { QualityProvider } from "@/components/quality/quality-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import type { Locale } from "@/lib/i18n/dictionaries";
+import { getServerLocale } from "@/lib/i18n/server";
 
 import "./globals.css";
 
@@ -30,6 +33,16 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
 });
 
+// Display-only serif for the ZENO wordmark and the homepage greeting. Its soft,
+// characterful shapes suit a warm "thinking partner" brand but hurt legibility
+// in dense UI, so it is never used for body/UI text — only large display.
+const averiaSerif = Averia_Serif_Libre({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  display: "swap",
+  variable: "--font-averia",
+});
+
 const LIGHT_THEME_COLOR = "hsl(0 0% 100%)";
 const DARK_THEME_COLOR = "hsl(240deg 10% 3.92%)";
 const THEME_COLOR_SCRIPT = `\
@@ -50,6 +63,41 @@ const THEME_COLOR_SCRIPT = `\
   updateThemeColor();
 })();`;
 
+function Providers({
+  locale,
+  children,
+}: {
+  locale?: Locale;
+  children: React.ReactNode;
+}) {
+  return (
+    <LocaleProvider initialLocale={locale}>
+      <QualityProvider>
+        <TooltipProvider>
+          <Toaster
+            position="top-center"
+            theme="system"
+            toastOptions={{
+              className:
+                "!bg-card !text-foreground !border-border/50 !shadow-[var(--shadow-float)]",
+            }}
+          />
+          {children}
+        </TooltipProvider>
+      </QualityProvider>
+    </LocaleProvider>
+  );
+}
+
+// Reads the locale cookie on the server so the whole tree renders in the user's
+// language — keeping SSR and client hydration in sync even for client
+// components that hydrate late under streaming. cookies() must sit inside a
+// Suspense boundary under cacheComponents (see the fallback below).
+async function LocalizedProviders({ children }: { children: React.ReactNode }) {
+  const locale = await getServerLocale();
+  return <Providers locale={locale}>{children}</Providers>;
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -57,7 +105,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      className={`${geist.variable} ${geistMono.variable}`}
+      className={`${geist.variable} ${geistMono.variable} ${averiaSerif.variable}`}
       lang="en"
       suppressHydrationWarning
     >
@@ -76,21 +124,9 @@ export default function RootLayout({
           disableTransitionOnChange
           enableSystem
         >
-          <LocaleProvider>
-            <QualityProvider>
-              <TooltipProvider>
-                <Toaster
-                  position="top-center"
-                  theme="system"
-                  toastOptions={{
-                    className:
-                      "!bg-card !text-foreground !border-border/50 !shadow-[var(--shadow-float)]",
-                  }}
-                />
-                {children}
-              </TooltipProvider>
-            </QualityProvider>
-          </LocaleProvider>
+          <Suspense fallback={<Providers>{children}</Providers>}>
+            <LocalizedProviders>{children}</LocalizedProviders>
+          </Suspense>
         </ThemeProvider>
       </body>
     </html>

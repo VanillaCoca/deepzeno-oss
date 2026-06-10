@@ -3,7 +3,13 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import type { UIMessage } from "ai";
 import equal from "fast-deep-equal";
-import { ArrowUpIcon, BrainIcon, Loader2Icon, PlusIcon } from "lucide-react";
+import {
+  ArrowUpIcon,
+  BrainIcon,
+  GaugeIcon,
+  Loader2Icon,
+  PlusIcon,
+} from "lucide-react";
 import {
   type ChangeEvent,
   type Dispatch,
@@ -29,10 +35,14 @@ import {
 } from "@/components/ai-elements/model-selector";
 import { useLocale } from "@/components/i18n/locale-provider";
 import { IRBulkImportDialog } from "@/components/ir/ir-bulk-import-dialog";
+import { useQuality } from "@/components/quality/quality-provider";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useWorkspace } from "@/components/workspace/workspace-provider";
@@ -65,6 +75,16 @@ function setCookie(name: string, value: string) {
   const maxAge = 60 * 60 * 24 * 365;
   // biome-ignore lint/suspicious/noDocumentCookie: needed for client-side cookie setting
   document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}`;
+}
+
+// The logo already shows the vendor, so drop a trailing provider qualifier like
+// " (Bedrock)" / " (DeepSeek)" from the displayed name — keep the picker to just
+// logo + model name.
+function displayModelName(name?: string) {
+  if (!name) {
+    return "";
+  }
+  return name.replace(/\s*\([^)]*\)\s*$/, "").trim() || name;
 }
 
 function getSlashInvocation(value: string) {
@@ -652,6 +672,7 @@ function PureMultimodalInput({
               onSwitchingChange={setIsSwitchingModel}
               selectedModelId={selectedModelId}
             />
+            <QualitySelector />
           </PromptInputTools>
 
           {status === "submitted" ? (
@@ -887,88 +908,142 @@ function PureModelSelectorCompact({
   }
 
   return (
-    <ModelSelector onOpenChange={setOpen} open={open}>
-      <ModelSelectorTrigger asChild>
-        <Button
-          className="h-7 max-w-[200px] justify-between gap-1.5 rounded-lg px-2 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
-          data-testid="model-selector"
-          variant="ghost"
-        >
-          {isSwitching ? (
-            <>
-              <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
-              <ModelSelectorName className="animate-pulse text-muted-foreground">
-                {isAuto ? t("chat.autoModel") : selectedModel?.name}
-              </ModelSelectorName>
-            </>
-          ) : isAuto ? (
-            <ModelSelectorName>{t("chat.autoModel")}</ModelSelectorName>
-          ) : (
-            <>
-              <ModelSelectorLogo provider={selectedModel?.provider} />
-              <ModelSelectorName>{selectedModel?.name}</ModelSelectorName>
-            </>
-          )}
-        </Button>
-      </ModelSelectorTrigger>
-      <ModelSelectorContent>
-        {/* Auto is a plain button (not a cmdk item) so it is always clickable. */}
-        <button
-          className="mx-1 mt-1 flex items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-foreground transition-colors hover:bg-muted/50"
-          data-testid="model-selector-auto"
-          onClick={() => handleModelSelect("auto")}
-          type="button"
-        >
-          <span className="flex-1 truncate">{t("chat.autoModel")}</span>
-          <span className="text-[11px] text-muted-foreground">
-            {t("chat.autoModelHint")}
-          </span>
-        </button>
-        <ModelSelectorList>
-          {(() => {
-            const allModels = dynamicModels ?? chatModels;
-            const grouped: Record<string, ChatModel[]> = {};
-
-            for (const model of allModels) {
-              const key = model.providerLabel;
-              if (!grouped[key]) {
-                grouped[key] = [];
-              }
-              grouped[key].push(model);
-            }
-
-            return Object.entries(grouped).map(([groupName, models]) => (
-              <ModelSelectorGroup heading={groupName} key={groupName}>
-                {models.map((model) => (
-                  <ModelSelectorItem
-                    className={cn(
-                      "flex w-full",
-                      model.id === selectedModel?.id &&
-                        "border-b border-dashed border-foreground/50"
-                    )}
-                    data-testid="model-selector-item"
-                    key={model.id}
-                    onClick={() => handleModelSelect(model.id)}
-                    onSelect={() => handleModelSelect(model.id)}
-                    value={model.id}
-                  >
-                    <ModelSelectorLogo provider={model.provider} />
-                    <ModelSelectorName>{model.name}</ModelSelectorName>
-                    {capabilities?.[model.id]?.reasoning && (
-                      <BrainIcon className="ml-auto size-3.5 text-foreground/70" />
-                    )}
-                  </ModelSelectorItem>
-                ))}
-              </ModelSelectorGroup>
-            ));
-          })()}
-        </ModelSelectorList>
-      </ModelSelectorContent>
-    </ModelSelector>
+    <>
+      {/* Keep every vendor logo mounted + cached so the menu shows them
+          instantly — without this they fetch only when the menu first opens,
+          giving a brief flash of missing logos. */}
+      <span aria-hidden className="hidden">
+        {Array.from(
+          new Set((dynamicModels ?? chatModels).map((m) => m.provider))
+        ).map((provider) => (
+          <ModelSelectorLogo key={provider} provider={provider} />
+        ))}
+      </span>
+      <ModelSelector onOpenChange={setOpen} open={open}>
+        <ModelSelectorTrigger asChild>
+          <Button
+            className="h-7 max-w-[200px] justify-between gap-1.5 rounded-lg px-2 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
+            data-testid="model-selector"
+            variant="ghost"
+          >
+            {isSwitching ? (
+              <>
+                <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
+                <ModelSelectorName className="animate-pulse text-muted-foreground">
+                  {isAuto
+                    ? t("chat.autoModel")
+                    : displayModelName(selectedModel?.name)}
+                </ModelSelectorName>
+              </>
+            ) : isAuto ? (
+              <ModelSelectorName>{t("chat.autoModel")}</ModelSelectorName>
+            ) : (
+              <>
+                <ModelSelectorLogo provider={selectedModel?.provider} />
+                <ModelSelectorName>
+                  {displayModelName(selectedModel?.name)}
+                </ModelSelectorName>
+              </>
+            )}
+          </Button>
+        </ModelSelectorTrigger>
+        <ModelSelectorContent>
+          {/* Auto is a plain button (not a cmdk item) so it is always clickable. */}
+          <button
+            className="mx-1 mt-1 flex items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-foreground transition-colors hover:bg-muted/50"
+            data-testid="model-selector-auto"
+            onClick={() => handleModelSelect("auto")}
+            type="button"
+          >
+            <span className="flex-1 truncate">{t("chat.autoModel")}</span>
+            <span className="text-[11px] text-muted-foreground">
+              {t("chat.autoModelHint")}
+            </span>
+          </button>
+          <ModelSelectorList>
+            {/* Flat list — no per-vendor headings; the logo conveys the vendor. */}
+            <ModelSelectorGroup>
+              {(dynamicModels ?? chatModels).map((model) => (
+                <ModelSelectorItem
+                  className={cn(
+                    "flex w-full",
+                    model.id === selectedModel?.id && "bg-muted/50"
+                  )}
+                  data-testid="model-selector-item"
+                  key={model.id}
+                  onClick={() => handleModelSelect(model.id)}
+                  onSelect={() => handleModelSelect(model.id)}
+                  value={model.id}
+                >
+                  <ModelSelectorLogo provider={model.provider} />
+                  <ModelSelectorName>
+                    {displayModelName(model.name)}
+                  </ModelSelectorName>
+                  {capabilities?.[model.id]?.reasoning && (
+                    <BrainIcon className="ml-auto size-3.5 text-foreground/70" />
+                  )}
+                </ModelSelectorItem>
+              ))}
+            </ModelSelectorGroup>
+          </ModelSelectorList>
+        </ModelSelectorContent>
+      </ModelSelector>
+    </>
   );
 }
 
 const ModelSelectorCompact = memo(PureModelSelectorCompact);
+
+// Thinking-depth control, sat next to the model picker in the composer footer
+// (moved here from the account menu). It steers the cost/quality of the Auto
+// router; for an explicitly picked model the server ignores it.
+function QualitySelector() {
+  const { quality, setQuality } = useQuality();
+  const { t } = useLocale();
+
+  const label =
+    quality === "economy"
+      ? t("chat.qualityEconomy")
+      : quality === "best"
+        ? t("chat.qualityBest")
+        : t("chat.qualityBalanced");
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          className="h-7 gap-1.5 rounded-lg px-2 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
+          type="button"
+          variant="ghost"
+        >
+          <GaugeIcon className="size-3.5 shrink-0" />
+          <span className="max-w-[120px] truncate">{label}</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-44">
+        <DropdownMenuLabel className="font-normal text-[11px] text-muted-foreground/70">
+          {t("chat.quality")}
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          onValueChange={(value) =>
+            setQuality(value as "economy" | "balanced" | "best")
+          }
+          value={quality}
+        >
+          <DropdownMenuRadioItem value="economy">
+            {t("chat.qualityEconomy")}
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="balanced">
+            {t("chat.qualityBalanced")}
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="best">
+            {t("chat.qualityBest")}
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 function PureStopButton({
   stop,

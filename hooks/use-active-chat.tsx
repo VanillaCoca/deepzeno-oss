@@ -71,6 +71,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     consumeInjectedDecisionContext,
     sandboxNavPending,
     endSandboxNav,
+    setActiveConversationEmpty,
   } = useWorkspace();
   const { locale } = useLocale();
   const { quality } = useQuality();
@@ -126,11 +127,25 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
   const activeTopicIdRef = useRef<string | null>(activeTopicId);
   const activeTopicIsGeneralRef = useRef(Boolean(activeTopic?.isGeneral));
+  // Mirror the active selection into refs so the transport closure (built once,
+  // never rebuilt) always posts the CURRENT project/topic/conversation. Reading
+  // these from state inside the closure captured stale (often null) values right
+  // after a fresh entry or topic switch, which made the first send race and fail
+  // — same reasoning as localeRef/qualityRef above.
+  const activeProjectIdRef = useRef<string | null>(activeProjectId);
+  const currentConversationIdRef = useRef<string | null>(currentConversationId);
 
   useEffect(() => {
     activeTopicIdRef.current = activeTopicId;
     activeTopicIsGeneralRef.current = Boolean(activeTopic?.isGeneral);
-  }, [activeTopic?.isGeneral, activeTopicId]);
+    activeProjectIdRef.current = activeProjectId;
+    currentConversationIdRef.current = currentConversationId;
+  }, [
+    activeProjectId,
+    activeTopic?.isGeneral,
+    activeTopicId,
+    currentConversationId,
+  ]);
 
   function scheduleIRRefresh(projectId: string | null, topicId: string | null) {
     if (!projectId || !topicId) {
@@ -213,6 +228,10 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
 
   const initialMessages: ChatMessage[] = chatData?.messages ?? [];
   const visibility: VisibilityType = chatData?.visibility ?? "private";
+  const visibilityRef = useRef(visibility);
+  useEffect(() => {
+    visibilityRef.current = visibility;
+  }, [visibility]);
   const compactedThroughMessageId: string | null =
     chatData?.compaction?.compactedThroughMessageId ?? null;
   const modelByMessageId: Record<string, string> = chatData?.models ?? {};
@@ -273,10 +292,10 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
               ? { messages: request.messages }
               : { message: lastMessage }),
             selectedChatModel: currentModelIdRef.current,
-            selectedVisibilityType: visibility,
-            projectId: activeProjectId,
-            topicId: activeTopicId,
-            conversationId: currentConversationId,
+            selectedVisibilityType: visibilityRef.current,
+            projectId: activeProjectIdRef.current,
+            topicId: activeTopicIdRef.current,
+            conversationId: currentConversationIdRef.current,
             injectedDecisionContext: isToolApprovalContinuation
               ? undefined
               : consumeInjectedDecisionContext(),
@@ -324,6 +343,14 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       setMessages(chatData.messages);
     }
   }, [chatData?.messages, setMessages]);
+
+  // Bridge the live emptiness of the active conversation up to the workspace so
+  // the header can disable "Explore new idea" on a blank page — exploring from
+  // an empty conversation only spawns another blank one. setState bails when the
+  // boolean is unchanged, so this doesn't re-render on every streamed token.
+  useEffect(() => {
+    setActiveConversationEmpty(messages.length === 0);
+  }, [messages.length, setActiveConversationEmpty]);
 
   useEffect(() => {
     if (!currentConversationId) {

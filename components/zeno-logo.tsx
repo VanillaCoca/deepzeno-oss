@@ -5,14 +5,13 @@
  * themes: set the text color on the element (we use `text-sidebar-foreground`)
  * and the mark is black in light mode / white in dark mode — no second asset.
  *
- * The mask (`public/zeno-logo-mask.png`) is a bold profile silhouette built
- * from the source art (`public/zeno-logo2.png`): flood-fill the line-art
- * outline into a solid shape, then carve a few key interior strokes back out
- * as negative space so it stays legible at 24-28px. Regenerate with sharp
- * (alpha → seal → flood-fill → carve → tight-crop) after a logo change; the
- * component wiring below never changes.
+ * The mask is the clean vector silhouette `public/zeno-logo.svg` (a single
+ * filled path on a transparent background, so its alpha is the shape). Being a
+ * vector it stays crisp at any size and has no cut-out artifacts. To change the
+ * logo, drop in a new silhouette SVG (filled shape, transparent background) —
+ * the component wiring below never changes.
  */
-const MASK_URL = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/zeno-logo-mask.png`;
+const MASK_URL = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/zeno-logo.svg`;
 
 export function ZenoLogo({ className }: { className?: string }) {
   return (

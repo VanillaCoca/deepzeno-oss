@@ -15,6 +15,14 @@ export async function getServerLocale(): Promise<Locale> {
 
 export async function getHomeTranslator() {
   const locale = await getServerLocale();
-  return (key: string) =>
-    homeMessages[locale][key] ?? homeMessages[defaultLocale][key] ?? key;
+  return (key: string, params?: Record<string, string | number>) => {
+    const template =
+      homeMessages[locale][key] ?? homeMessages[defaultLocale][key] ?? key;
+    if (!params) {
+      return template;
+    }
+    return template.replace(/\{(\w+)\}/g, (match, name: string) =>
+      name in params ? String(params[name]) : match
+    );
+  };
 }

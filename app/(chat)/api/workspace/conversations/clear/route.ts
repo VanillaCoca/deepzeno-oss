@@ -42,6 +42,12 @@ export async function POST(request: Request) {
     }
 
     console.error("Clear conversation failed", error);
-    return new ChatbotError("bad_request:api").toResponse();
+    // Surface the underlying reason (api surface returns `cause` in the body) so
+    // the client toast and the dev console show what actually broke instead of a
+    // generic "Request failed".
+    return new ChatbotError(
+      "bad_request:api",
+      error instanceof Error ? error.message : undefined
+    ).toResponse();
   }
 }

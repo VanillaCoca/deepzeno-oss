@@ -15,6 +15,9 @@ export const headerMessages: LocaleMessages = {
       "Start fresh on a new idea in this topic? ZENO will review the current discussion before clearing.",
     "header.cancel": "Cancel",
     "header.exploreConfirm": "Yes, explore new",
+    "header.exploreProcessing": "Starting…",
+    "header.exploreFailed": "Couldn't start a new idea. Please try again.",
+    "header.exploreDisabledEmpty": "Start the conversation first",
   },
   zh: {
     "header.toggleSidebar": "切换侧边栏",
@@ -30,6 +33,9 @@ export const headerMessages: LocaleMessages = {
       "在该主题里另起一个新想法？ZENO 会在清空前先回顾当前讨论。",
     "header.cancel": "取消",
     "header.exploreConfirm": "好，探索新想法",
+    "header.exploreProcessing": "正在开始…",
+    "header.exploreFailed": "无法开始新想法，请重试。",
+    "header.exploreDisabledEmpty": "请先开始对话",
   },
   fr: {
     "header.toggleSidebar": "Basculer la barre latérale",
@@ -45,5 +51,9 @@ export const headerMessages: LocaleMessages = {
       "Repartir sur une nouvelle idée dans ce sujet ? ZENO passera en revue la discussion actuelle avant de l'effacer.",
     "header.cancel": "Annuler",
     "header.exploreConfirm": "Oui, explorer",
+    "header.exploreProcessing": "Démarrage…",
+    "header.exploreFailed":
+      "Impossible de démarrer une nouvelle idée. Réessayez.",
+    "header.exploreDisabledEmpty": "Commencez d'abord la conversation",
   },
 };

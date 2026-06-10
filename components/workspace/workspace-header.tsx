@@ -3,12 +3,14 @@
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  Loader2Icon,
   MessagesSquareIcon,
   NetworkIcon,
   PanelLeftIcon,
   SparklesIcon,
 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { useLocale } from "@/components/i18n/locale-provider";
 import { useIR } from "@/components/ir/ir-provider";
 import {
@@ -53,12 +55,16 @@ export function WorkspaceHeader({
     goBack,
     goForward,
     clearConversation,
+    isActiveConversationEmpty,
   } = useWorkspace();
   const [exploreOpen, setExploreOpen] = useState(false);
   const [isExploring, setIsExploring] = useState(false);
 
   async function handleExplore() {
-    if (!(activeProjectId && activeTopicId && currentConversationId)) {
+    if (
+      !(activeProjectId && activeTopicId && currentConversationId) ||
+      isActiveConversationEmpty
+    ) {
       return;
     }
     setIsExploring(true);
@@ -74,6 +80,16 @@ export function WorkspaceHeader({
       }).catch(console.error);
       await clearConversation();
       setExploreOpen(false);
+    } catch (error) {
+      // Surface the real reason instead of failing silently — clearConversation
+      // throws the server's message (see postWorkspaceUpdate). Keep the dialog
+      // open so the user can retry.
+      console.error("Explore new idea failed", error);
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : t("header.exploreFailed")
+      );
     } finally {
       setIsExploring(false);
     }
@@ -133,10 +149,16 @@ export function WorkspaceHeader({
               !activeProjectId ||
               !activeTopicId ||
               !currentConversationId ||
+              isActiveConversationEmpty ||
               Boolean(activeTopic?.archivedAt)
             }
             onClick={() => setExploreOpen(true)}
             size="icon-sm"
+            title={
+              isActiveConversationEmpty
+                ? t("header.exploreDisabledEmpty")
+                : t("header.exploreNewIdea")
+            }
             variant="ghost"
           >
             <SparklesIcon className="size-4" />
@@ -216,7 +238,10 @@ export function WorkspaceHeader({
                 handleExplore().catch(console.error);
               }}
             >
-              {t("header.exploreConfirm")}
+              {isExploring && <Loader2Icon className="size-4 animate-spin" />}
+              {isExploring
+                ? t("header.exploreProcessing")
+                : t("header.exploreConfirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

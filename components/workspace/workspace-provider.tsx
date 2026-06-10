@@ -64,6 +64,12 @@ type WorkspaceContextValue = {
   renameTopic: (topicId: string, label: string) => Promise<void>;
   renameProject: (projectId: string, name: string) => Promise<void>;
   clearConversation: () => Promise<void>;
+  // Whether the active conversation has no messages. Bridged up from the chat
+  // (which owns the live message list) so the header can stop "Explore new idea"
+  // from spawning yet another blank conversation. Defaults to true (disabled)
+  // until the chat reports otherwise.
+  isActiveConversationEmpty: boolean;
+  setActiveConversationEmpty: (empty: boolean) => void;
   goBack: () => void;
   goForward: () => void;
   canGoBack: boolean;
@@ -190,6 +196,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [sandboxNavPending, setSandboxNavPending] = useState(false);
   const [pendingCandidateCounts, setPendingCandidateCounts] =
     useState<PendingCandidateCounts>({});
+  const [isActiveConversationEmpty, setActiveConversationEmpty] =
+    useState(true);
 
   const {
     data,
@@ -301,7 +309,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
     if (!response.ok) {
       const payload = await response.json().catch(() => null);
-      throw new Error(payload?.cause ?? payload?.error ?? "Request failed");
+      throw new Error(
+        payload?.cause ?? payload?.message ?? payload?.error ?? "Request failed"
+      );
     }
 
     return response.json();
@@ -566,6 +576,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     renameTopic,
     renameProject,
     clearConversation,
+    isActiveConversationEmpty,
+    setActiveConversationEmpty,
     goBack,
     goForward,
     canGoBack,
