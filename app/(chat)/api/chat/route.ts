@@ -219,7 +219,7 @@ export async function POST(request: Request) {
 
     const chat = await getChatById({ id });
     let messagesFromDb: DBMessage[] = [];
-    let titlePromise: Promise<string> | null = null;
+    let titlePromise: Promise<string | null> | null = null;
 
     if (chat) {
       if (chat.userId !== session.user.id) {
@@ -233,7 +233,26 @@ export async function POST(request: Request) {
         title: "New chat",
         visibility: selectedVisibilityType,
       });
-      titlePromise = generateTitleFromUserMessage({ message });
+      // A title is non-essential and may call a DIFFERENT provider than the chat
+      // model (e.g. the title model resolves to OpenAI while chat runs on
+      // Bedrock). Swallow its failure here so it can never reject and break the
+      // answer stream — that was the "first message of a new conversation always
+      // errors" bug. We catch at creation (not just at await) to avoid an
+      // unhandled rejection if the title fails before the stream consumes it.
+      titlePromise = generateTitleFromUserMessage({ message }).catch(
+        (titleError) => {
+          console.error(
+            "Title generation failed; using a fallback title",
+            titleError
+          );
+          // Local fallback so a new chat still gets a meaningful name without the
+          // (possibly unreachable) title model — first line / first ~50 chars of
+          // the user's message.
+          const text = getTextFromMessage(message).trim();
+          const firstLine = text.split(/\r?\n/)[0] ?? "";
+          return firstLine.slice(0, 50).trim() || null;
+        }
+      );
     }
 
     let uiMessages: ChatMessage[];
@@ -442,8 +461,10 @@ export async function POST(request: Request) {
 
         if (titlePromise) {
           const title = await titlePromise;
-          dataStream.write({ type: "data-chat-title", data: title });
-          updateChatTitleById({ chatId: id, title });
+          if (title) {
+            dataStream.write({ type: "data-chat-title", data: title });
+            updateChatTitleById({ chatId: id, title });
+          }
         }
       },
       generateId: generateUUID,
