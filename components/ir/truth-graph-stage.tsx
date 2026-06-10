@@ -14,7 +14,9 @@ export function TruthGraphStage() {
   const { truth, truthEdges, ideas, candidates, selectedNodeId, selectNode } =
     useIR();
   const { topics, activeProjectId, requestView } = useWorkspace();
-  const [graphMode, setGraphMode] = useState<TruthGraphMode>("truth");
+  // Default to "all" so first-time users see the full picture (truths +
+  // candidates + ideas); they can narrow to confirmed truths via the toggle.
+  const [graphMode, setGraphMode] = useState<TruthGraphMode>("all");
 
   const { data: detail, mutate: mutateDetail } = useSWR<IRDetail>(
     irNodeKey(selectedNodeId),

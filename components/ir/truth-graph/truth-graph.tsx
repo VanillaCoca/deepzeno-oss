@@ -298,6 +298,51 @@ function useOverviewPanZoom(
     moved: boolean;
   } | null>(null);
 
+  // Mirror the live transform into a ref so an eased animation can read the
+  // current value at start time and hand off smoothly from wherever it is.
+  const transformRef = useRef(transform);
+  useEffect(() => {
+    transformRef.current = transform;
+  }, [transform]);
+
+  const animRef = useRef<number | null>(null);
+  const cancelAnim = useCallback(() => {
+    if (animRef.current !== null) {
+      cancelAnimationFrame(animRef.current);
+      animRef.current = null;
+    }
+  }, []);
+
+  // Tween the viewport to a target transform (used by fit + the zoom buttons),
+  // so the canvas glides instead of snapping. Drag-pan and wheel-zoom stay
+  // instant — they should track the input 1:1.
+  const animateTo = useCallback(
+    (target: ViewTransform) => {
+      cancelAnim();
+      const start = transformRef.current;
+      const duration = 260;
+      const ease = (t: number) => 1 - (1 - t) ** 3;
+      let startTime: number | null = null;
+      const step = (now: number) => {
+        if (startTime === null) {
+          startTime = now;
+        }
+        const p = Math.min(1, (now - startTime) / duration);
+        const e = ease(p);
+        setTransform({
+          scale: start.scale + (target.scale - start.scale) * e,
+          x: start.x + (target.x - start.x) * e,
+          y: start.y + (target.y - start.y) * e,
+        });
+        animRef.current = p < 1 ? requestAnimationFrame(step) : null;
+      };
+      animRef.current = requestAnimationFrame(step);
+    },
+    [cancelAnim]
+  );
+
+  useEffect(() => cancelAnim, [cancelAnim]);
+
   // Scale + center the whole graph so it fits the viewport (capped at 1x).
   const fitToView = useCallback(() => {
     const element = containerRef.current;
@@ -312,29 +357,33 @@ function useOverviewPanZoom(
         (element.clientHeight - pad * 2) / contentHeight
       )
     );
-    setTransform({
+    animateTo({
       scale,
       x: (element.clientWidth - contentWidth * scale) / 2,
       y: (element.clientHeight - contentHeight * scale) / 2,
     });
-  }, [contentWidth, contentHeight]);
+  }, [contentWidth, contentHeight, animateTo]);
 
   // Re-fit whenever the content size changes (first layout, Truth/All toggle).
   useEffect(() => {
     fitToView();
   }, [fitToView]);
 
-  const zoomAt = useCallback((factor: number, px: number, py: number) => {
-    setTransform((current) => {
-      const scale = clampScale(current.scale * factor);
-      const ratio = scale / current.scale;
-      return {
-        scale,
-        x: px - (px - current.x) * ratio,
-        y: py - (py - current.y) * ratio,
-      };
-    });
-  }, []);
+  const zoomAt = useCallback(
+    (factor: number, px: number, py: number) => {
+      cancelAnim();
+      setTransform((current) => {
+        const scale = clampScale(current.scale * factor);
+        const ratio = scale / current.scale;
+        return {
+          scale,
+          x: px - (px - current.x) * ratio,
+          y: py - (py - current.y) * ratio,
+        };
+      });
+    },
+    [cancelAnim]
+  );
 
   // Native non-passive wheel listener so we can preventDefault the page scroll.
   useEffect(() => {
@@ -359,6 +408,8 @@ function useOverviewPanZoom(
     if (event.button !== 0) {
       return;
     }
+    // A fresh drag overrides any in-flight fit/zoom animation.
+    cancelAnim();
     drag.current = {
       ox: transform.x,
       oy: transform.y,
@@ -406,9 +457,18 @@ function useOverviewPanZoom(
       if (!element) {
         return;
       }
-      zoomAt(factor, element.clientWidth / 2, element.clientHeight / 2);
+      const px = element.clientWidth / 2;
+      const py = element.clientHeight / 2;
+      const current = transformRef.current;
+      const scale = clampScale(current.scale * factor);
+      const ratio = scale / current.scale;
+      animateTo({
+        scale,
+        x: px - (px - current.x) * ratio,
+        y: py - (py - current.y) * ratio,
+      });
     },
-    [zoomAt]
+    [animateTo]
   );
 
   return {
@@ -588,20 +648,24 @@ function nodeTone({
 function GraphNode({
   box,
   subNodeCount = 0,
-  hasSelection,
+  dimmed,
   isOnChain,
   isRoot,
   isSelected,
   node,
+  onHover,
   onSelect,
 }: {
   box: NodeBox;
   subNodeCount?: number;
-  hasSelection: boolean;
+  // Whether this node is faded because the focus is elsewhere (a selection's
+  // chain, or a hovered node's neighborhood). Computed by the caller.
+  dimmed: boolean;
   isOnChain: boolean;
   isRoot: boolean;
   isSelected: boolean;
   node: IRNode;
+  onHover?: (nodeId: string | null) => void;
   onSelect: (nodeId: string) => void;
 }) {
   const tone = nodeTone({ isOnChain, isSelected, node });
@@ -650,11 +714,9 @@ function GraphNode({
       data-testid={`truth-graph-node-${node.id}`}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
-      opacity={
-        !hasSelection || isOnChain || isSelected
-          ? "var(--z-focus-full)"
-          : "var(--z-focus-faint)"
-      }
+      onPointerEnter={onHover ? () => onHover(node.id) : undefined}
+      onPointerLeave={onHover ? () => onHover(null) : undefined}
+      opacity={dimmed ? "var(--z-focus-faint)" : "var(--z-focus-full)"}
       role="button"
       style={{ transition: "opacity var(--z-transition)" }}
       tabIndex={0}
@@ -737,7 +799,7 @@ function CompactTruthList({
 }) {
   return (
     <div
-      className="border-y border-[var(--z-topic-border)]"
+      className="select-none border-y border-[var(--z-topic-border)]"
       data-testid="truth-graph-compact-list"
       style={{ color: "var(--z-text)", fontFamily: "var(--z-font-sans)" }}
     >
@@ -797,6 +859,27 @@ export function TruthGraph({
     selectedNodeId && model.nodeById.has(selectedNodeId)
       ? selectedNodeId
       : null;
+
+  // Hovering a node (only when nothing is selected) previews its connections:
+  // the node + its direct neighbors stay bright, the rest fade. Reuses the same
+  // opacity-dimming as selection focus, so it costs almost nothing.
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const hoverActive = Boolean(hoveredId) && !activeSelectedNodeId;
+  const hoverNeighborIds = useMemo(() => {
+    const set = new Set<string>();
+    if (!hoveredId) {
+      return set;
+    }
+    for (const edge of edges) {
+      if (edge.fromNode === hoveredId) {
+        set.add(edge.toNode);
+      }
+      if (edge.toNode === hoveredId) {
+        set.add(edge.fromNode);
+      }
+    }
+    return set;
+  }, [hoveredId, edges]);
   const chainNodeIds = useMemo(() => {
     const upstream = getUpstreamNodeIds(model, activeSelectedNodeId);
     if (!activeSelectedNodeId) {
@@ -963,37 +1046,37 @@ export function TruthGraph({
         className="flex h-full flex-col bg-[var(--z-bg)]"
         data-testid="truth-graph-overview"
       >
-        <div className="flex items-center justify-between gap-2 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-[var(--z-text-3)]">
-          <span>{t("graph.overview")}</span>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center rounded-md border border-[var(--z-topic-border)] p-0.5 normal-case">
-              {(["truth", "all"] as const).map((scope) => (
-                <button
-                  aria-label={
-                    scope === "truth"
-                      ? t("graph.showTruthsOnly")
-                      : t("graph.showAllStages")
-                  }
-                  aria-pressed={mode === scope}
-                  className={cn(
-                    "rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors",
-                    mode === scope
-                      ? "bg-[var(--z-node-fill)] text-[var(--z-text)]"
-                      : "text-[var(--z-text-3)] hover:text-[var(--z-text-2)]"
-                  )}
-                  key={scope}
-                  onClick={() => onModeChange(scope)}
-                  type="button"
-                >
-                  {scope === "truth" ? t("graph.truth") : t("graph.all")}
-                </button>
-              ))}
-            </div>
-            <span className="normal-case">
-              {nodes.length}{" "}
-              {mode === "all" ? t("graph.nodes") : t("graph.truths")}
-            </span>
+        <div className="flex items-center justify-between gap-2 px-3 py-2">
+          {/* Primary view filter — enlarged, left-aligned, "All" first (the
+              default) so first-time users notice it. Kept compact so it stays
+              minimal and never crowds the canvas. */}
+          <div className="flex items-center rounded-lg border border-[var(--z-topic-border)] bg-[var(--z-card-bg)] p-0.5">
+            {(["all", "truth"] as const).map((scope) => (
+              <button
+                aria-label={
+                  scope === "truth"
+                    ? t("graph.showTruthsOnly")
+                    : t("graph.showAllStages")
+                }
+                aria-pressed={mode === scope}
+                className={cn(
+                  "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                  mode === scope
+                    ? "bg-[var(--z-node-fill)] text-[var(--z-text)]"
+                    : "text-[var(--z-text-3)] hover:text-[var(--z-text-2)]"
+                )}
+                key={scope}
+                onClick={() => onModeChange(scope)}
+                type="button"
+              >
+                {scope === "truth" ? t("graph.truth") : t("graph.all")}
+              </button>
+            ))}
           </div>
+          <span className="text-[11px] font-medium text-[var(--z-text-3)]">
+            {nodes.length}{" "}
+            {mode === "all" ? t("graph.nodes") : t("graph.truths")}
+          </span>
         </div>
         {mode === "all" ? (
           <div className="flex items-center gap-3 px-3 pb-1.5 text-[10px] text-[var(--z-text-3)]">
@@ -1031,7 +1114,7 @@ export function TruthGraph({
         >
           <svg
             aria-label={t("graph.overviewAria")}
-            className="h-full w-full"
+            className="h-full w-full select-none"
             role="img"
           >
             <defs>
@@ -1100,16 +1183,22 @@ export function TruthGraph({
 
                 const isSelected = activeSelectedNodeId === node.id;
                 const isOnChain = chainNodeIds.has(node.id);
+                const dimmed = activeSelectedNodeId
+                  ? !(isOnChain || isSelected)
+                  : hoverActive
+                    ? !(node.id === hoveredId || hoverNeighborIds.has(node.id))
+                    : false;
 
                 return (
                   <GraphNode
                     box={box}
-                    hasSelection={Boolean(activeSelectedNodeId)}
+                    dimmed={dimmed}
                     isOnChain={isOnChain}
                     isRoot={false}
                     isSelected={isSelected}
                     key={node.id}
                     node={node}
+                    onHover={setHoveredId}
                     onSelect={onSelect}
                     subNodeCount={childrenByParent.get(node.id)?.length ?? 0}
                   />
@@ -1179,6 +1268,7 @@ export function TruthGraph({
             >
               <svg
                 aria-label={t("graph.chainAria")}
+                className="select-none"
                 height={chainHeight * chainFit.scale}
                 preserveAspectRatio="xMidYMid meet"
                 role="img"
@@ -1240,7 +1330,7 @@ export function TruthGraph({
                   return (
                     <GraphNode
                       box={box}
-                      hasSelection={true}
+                      dimmed={false}
                       isOnChain={true}
                       isRoot={chainRootIds.has(nodeId)}
                       isSelected={activeSelectedNodeId === nodeId}
