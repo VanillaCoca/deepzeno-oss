@@ -157,10 +157,10 @@ export function KickoffReviewDialog({
                   {t("kickoff.charterLabel")}: {topic.charter}
                 </p>
                 <ul className="mt-2 flex flex-col gap-1">
-                  {topic.nodes.map((node, nodeIndex) => (
+                  {topic.nodes.map((node) => (
                     <li
                       className="flex items-baseline gap-2 text-sm"
-                      key={`${node.title}-${nodeIndex}`}
+                      key={`${node.kind}-${node.title}`}
                     >
                       <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                         {node.kind.replace("_", " ")}
