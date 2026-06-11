@@ -31,7 +31,7 @@ const INTAKE_TEMPLATES: Record<"en" | "zh" | "fr", string> = {
     "4. 你现在最不确定的是什么？",
     "5. 有哪些你控制不了的外部因素可能改变局面？",
     "",
-    `答完后点上方的"生成主题提案"，我会起草一份主题拆解，把听到的待决问题、约束和目标整理出来 — 每一项都以候选形式出现，由你确认。也可以跳过，从空白开始。`,
+    "答完后点上方的“生成主题提案”，我会起草一份主题拆解，把听到的待决问题、约束和目标整理出来 — 每一项都以候选形式出现，由你确认。也可以跳过，从空白开始。",
   ].join("\n"),
   fr: [
     "Bienvenue — avant d'aller plus loin, aidez-moi à comprendre ce projet. Répondez avec vos propres mots, longuement ou non :",
