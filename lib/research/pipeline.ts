@@ -617,6 +617,9 @@ export async function runResearchPipeline({
         id: run.id,
         status: "failed",
         error: "No quote-verified evidence collected",
+        // Plan + collect tokens were spent even though nothing landed.
+        modelsUsed,
+        costEstimate: computeCostEstimate(modelsUsed),
         finishedAt: now,
       });
       await logIREvent({
