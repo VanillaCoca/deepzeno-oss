@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ZENO — Make your research and planning more insightful</title>
+<meta name="description" content="An insight-first AI workspace for long-cycle projects. ZENO researches your open questions, keeps every judgment you confirm, and shows how your thinking connects — even as the goal shifts under you." />
+<meta property="og:title" content="ZENO — Insight-first AI" />
+<meta property="og:description" content="Make your research and planning more insightful." />
+<meta property="og:type" content="website" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#000000;
+    --bg-1:#0A0A0B;
+    --bg-2:#101011;
+    --line:#212123;
+    --line-2:#161617;
+    --text:#F5F5F6;
+    --dim:#9A9AA0;
+    --faint:#5E5E64;
+    --hi:#FFFFFF;
+    --ok:#D6D6DA;
+    --radius:16px;
+    --radius-sm:11px;
+    --maxw:1120px;
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);color:var(--text);font-family:var(--sans);
+    font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;overflow-x:hidden;
+  }
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px;position:relative;z-index:2}
+
+  /* film grain overlay */
+  .grain{position:fixed;inset:0;z-index:90;pointer-events:none;opacity:.045;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+
+  /* eyebrow */
+  .eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.06em;color:var(--dim);display:inline-flex;align-items:center;gap:7px}
+  .eyebrow::before{content:"//";color:var(--faint)}
+
+  /* buttons */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--sans);font-size:15px;font-weight:550;padding:11px 18px;border-radius:10px;cursor:pointer;border:1px solid transparent;transition:transform .12s,background .18s,border-color .18s,opacity .18s;white-space:nowrap}
+  .btn-primary{background:var(--hi);color:#000;font-weight:600}
+  .btn-primary:hover{background:#E4E4E7;transform:translateY(-1px)}
+  .btn-ghost{border-color:var(--line);color:var(--text);background:transparent}
+  .btn-ghost:hover{border-color:#34343A;background:rgba(255,255,255,.03)}
+  .btn:active{transform:translateY(0)}
+  .btn .arr{transition:transform .18s}
+  .btn:hover .arr{transform:translateX(3px)}
+
+  /* nav */
+  header.nav{position:sticky;top:0;z-index:60;backdrop-filter:saturate(140%) blur(14px);background:rgba(0,0,0,.7);border-bottom:1px solid var(--line-2)}
+  .nav-inner{display:flex;align-items:center;justify-content:space-between;height:66px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:650;letter-spacing:.16em;font-size:15px}
+  .brand img{width:30px;height:30px;filter:invert(1);opacity:.96}
+  .nav-links{display:flex;align-items:center;gap:30px}
+  .nav-links a.navlink{color:var(--dim);font-size:14.5px;transition:color .18s}
+  .nav-links a.navlink:hover{color:var(--text)}
+  @media(max-width:760px){.nav-links a.navlink{display:none}}
+
+  /* hero */
+  .hero{padding:104px 0 44px;text-align:center;position:relative;overflow:hidden}
+  .hero-bg{position:absolute;inset:0;z-index:0;pointer-events:none}
+  .hero-bg canvas{position:absolute;inset:0;width:100%;height:100%}
+  .hero-bg::after{content:"";position:absolute;inset:0;background:radial-gradient(58% 50% at 50% 30%,#000 0%,rgba(0,0,0,.65) 45%,rgba(0,0,0,0) 100%)}
+  .hero .eyebrow{margin-bottom:24px}
+  h1{font-size:clamp(40px,6.6vw,76px);line-height:1.03;letter-spacing:-.035em;font-weight:600;margin:0 auto;max-width:15ch;color:var(--hi)}
+  .hero .sub{margin:28px auto 0;font-size:clamp(17px,2vw,20px);line-height:1.62;color:var(--dim);max-width:62ch;font-weight:400}
+  .hero-cta{display:flex;gap:12px;justify-content:center;margin-top:36px;flex-wrap:wrap}
+  .hero-cta .btn{padding:13px 22px;font-size:15.5px}
+  .micro{margin-top:18px;font-size:13px;color:var(--faint);font-family:var(--mono);letter-spacing:.02em}
+
+  /* hero product window */
+  .window{margin:66px auto 0;max-width:1000px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--bg-1);box-shadow:0 30px 90px -50px rgba(0,0,0,.9)}
+  .win-bar{display:flex;align-items:center;gap:14px;padding:13px 16px;border-bottom:1px solid var(--line-2)}
+  .win-dots{display:flex;gap:7px}
+  .win-dots span{width:11px;height:11px;border-radius:50%;background:#222226}
+  .win-title{font-family:var(--mono);font-size:12.5px;color:var(--faint);display:flex;align-items:center;gap:8px}
+  .win-title b{color:var(--dim);font-weight:500}
+  .win-body{padding:10px}
+
+  /* generic section */
+  section{padding:100px 0;position:relative;z-index:1}
+  .sec-top{border-top:1px solid var(--line-2)}
+  .sec-head{max-width:64ch}
+  .sec-head.center{margin:0 auto;text-align:center}
+  h2{font-size:clamp(28px,4vw,46px);line-height:1.1;letter-spacing:-.03em;font-weight:600;margin:18px 0 0;color:var(--hi)}
+  .sec-head p{margin-top:18px;color:var(--dim);font-size:18px;max-width:60ch}
+  .sec-head.center p{margin-left:auto;margin-right:auto}
+
+  /* "for" chips strip */
+  .forstrip{border-top:1px solid var(--line-2);border-bottom:1px solid var(--line-2)}
+  .forstrip .wrap{padding-top:32px;padding-bottom:32px;display:flex;align-items:center;gap:26px;flex-wrap:wrap;justify-content:center}
+  .forstrip .lbl{font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--faint);text-transform:uppercase}
+  .chips{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .chip{font-size:14px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:7px 15px;background:transparent;transition:border-color .2s,color .2s}
+  .chip:hover{border-color:#34343A;color:var(--text)}
+
+  /* contrast / problem */
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:48px}
+  @media(max-width:740px){.compare{grid-template-columns:1fr}}
+  .cmp{border:1px solid var(--line);border-radius:var(--radius);padding:30px 28px;background:var(--bg-1)}
+  .cmp.zeno{border-color:#34343A;background:var(--bg-2)}
+  .cmp .tag{font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  .cmp.zeno .tag{color:var(--text)}
+  .cmp h3{margin-top:12px;font-size:21px;font-weight:600;letter-spacing:-.01em;color:var(--text)}
+  .cmp ul{list-style:none;margin-top:18px;display:flex;flex-direction:column;gap:12px}
+  .cmp li{display:grid;grid-template-columns:18px 1fr;gap:11px;color:var(--dim);font-size:15px;line-height:1.5}
+  .cmp li .mk{font-family:var(--mono);padding-top:1px}
+  .cmp.old li .mk{color:var(--faint)}
+  .cmp.zeno li .mk{color:var(--text)}
+
+  /* vision art band */
+  .vision{position:relative;padding:128px 0;text-align:center;border-top:1px solid var(--line-2);border-bottom:1px solid var(--line-2);overflow:hidden}
+  .vision svg.flow{position:absolute;inset:0;width:100%;height:100%;z-index:0}
+  .vision::after{content:"";position:absolute;inset:0;background:radial-gradient(70% 70% at 50% 50%,rgba(0,0,0,0) 30%,#000 92%);z-index:1}
+  .vision .wrap{z-index:2}
+  .vision .vq{font-size:clamp(28px,4.6vw,50px);line-height:1.16;letter-spacing:-.03em;font-weight:600;color:var(--hi);max-width:18ch;margin:0 auto}
+  .vision .vs{margin:26px auto 0;color:var(--dim);font-size:18px;max-width:54ch;line-height:1.6}
+  .vision .vcred{margin-top:22px;font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+
+  /* alternating feature rows */
+  .feature{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;padding:58px 0;border-top:1px solid var(--line-2)}
+  .feature:first-of-type{border-top:none}
+  .feature.flip .ftext{order:2}
+  @media(max-width:860px){.feature{grid-template-columns:1fr;gap:30px}.feature.flip .ftext{order:0}}
+  .ftext .fnum{font-family:var(--mono);font-size:12.5px;color:var(--dim);letter-spacing:.05em}
+  .ftext h3{margin-top:14px;font-size:clamp(22px,2.6vw,30px);font-weight:600;letter-spacing:-.02em;line-height:1.16;color:var(--hi)}
+  .ftext p{margin-top:14px;color:var(--dim);font-size:16.5px;line-height:1.62;max-width:46ch}
+  .ftext .mech{margin-top:18px;font-family:var(--mono);font-size:12px;color:var(--faint);letter-spacing:.02em}
+  .fvis{border:1px solid var(--line);border-radius:var(--radius);background:var(--bg-1);padding:0;min-height:250px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .fvis svg{display:block;width:100%;height:auto}
+
+  /* how it works steps */
+  .steps{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;margin-top:52px;background:var(--line-2);border:1px solid var(--line-2);border-radius:var(--radius);overflow:hidden}
+  @media(max-width:900px){.steps{grid-template-columns:1fr 1fr}}
+  @media(max-width:560px){.steps{grid-template-columns:1fr}}
+  .step{background:var(--bg-1);padding:28px 22px}
+  .step .si{font-family:var(--mono);font-size:12px;color:var(--dim)}
+  .step h4{margin-top:14px;font-size:16px;font-weight:600;letter-spacing:-.01em;color:var(--text)}
+  .step p{margin-top:8px;color:var(--dim);font-size:14px;line-height:1.5}
+
+  /* benefits grid */
+  .bgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:50px}
+  @media(max-width:860px){.bgrid{grid-template-columns:1fr 1fr}}
+  @media(max-width:560px){.bgrid{grid-template-columns:1fr}}
+  .bcard{border:1px solid var(--line);border-radius:var(--radius);padding:28px 26px;background:var(--bg-1);transition:border-color .2s,transform .2s}
+  .bcard:hover{border-color:#303036;transform:translateY(-3px)}
+  .bcard .ic{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--text)}
+  .bcard .ic svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.6}
+  .bcard h4{margin-top:18px;font-size:17.5px;font-weight:600;letter-spacing:-.01em;color:var(--text)}
+  .bcard p{margin-top:9px;color:var(--dim);font-size:15px;line-height:1.55}
+
+  /* NOT band */
+  .notgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:46px}
+  @media(max-width:740px){.notgrid{grid-template-columns:1fr}}
+  .notitem{display:grid;grid-template-columns:22px 1fr;gap:13px;border:1px solid var(--line-2);border-radius:var(--radius-sm);padding:20px 22px;background:var(--bg-1);color:var(--dim);font-size:15.5px;line-height:1.5}
+  .notitem .x{color:var(--faint);font-family:var(--mono);padding-top:1px}
+  .notitem b{color:var(--text);font-weight:600}
+
+  /* faq */
+  .faq{margin-top:44px;border-top:1px solid var(--line-2)}
+  details{border-bottom:1px solid var(--line-2)}
+  summary{list-style:none;cursor:pointer;padding:23px 4px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:17.5px;font-weight:550;letter-spacing:-.01em;color:var(--text)}
+  summary::-webkit-details-marker{display:none}
+  summary .plus{flex:0 0 auto;width:22px;height:22px;position:relative;transition:transform .2s}
+  summary .plus::before,summary .plus::after{content:"";position:absolute;background:var(--dim);border-radius:2px}
+  summary .plus::before{top:10px;left:3px;width:16px;height:2px}
+  summary .plus::after{left:10px;top:3px;width:2px;height:16px;transition:opacity .2s}
+  details[open] summary .plus::after{opacity:0}
+  details[open] summary{color:var(--hi)}
+  .faq-a{padding:0 4px 24px;color:var(--dim);font-size:16px;line-height:1.66;max-width:72ch}
+
+  /* final cta */
+  .final{text-align:center;border-top:1px solid var(--line-2)}
+  .final-card{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:24px;background:var(--bg-1);padding:74px 32px}
+  .final-card canvas{position:absolute;inset:0;width:100%;height:100%;z-index:0;opacity:.7}
+  .final-card::after{content:"";position:absolute;inset:0;background:radial-gradient(60% 80% at 50% 40%,rgba(0,0,0,0) 20%,#0A0A0B 90%);z-index:1}
+  .final-card .wrap, .final-card > *:not(canvas):not(.final-card::after){position:relative;z-index:2}
+  .final-card .inner{position:relative;z-index:2}
+  .final h2{max-width:20ch;margin:0 auto}
+  .final p{margin-top:18px;color:var(--dim);font-size:18px}
+  .wl{display:flex;gap:10px;justify-content:center;margin:34px auto 0;max-width:460px;flex-wrap:wrap}
+  .wl input{flex:1 1 230px;min-width:0;background:#000;border:1px solid var(--line);border-radius:10px;color:var(--text);font-size:15.5px;padding:13px 15px;font-family:var(--sans)}
+  .wl input::placeholder{color:var(--faint)}
+  .wl input:focus{outline:none;border-color:#3A3A40;box-shadow:0 0 0 3px rgba(255,255,255,.06)}
+  .wl .btn-primary{padding:13px 20px}
+  .wl-ok{display:none;margin-top:20px;color:var(--ok);font-size:15.5px;font-family:var(--mono)}
+
+  /* footer */
+  footer{border-top:1px solid var(--line-2);padding:48px 0;color:var(--faint);font-size:13.5px}
+  .foot-inner{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap}
+  .foot-inner .brand{font-size:13px;color:var(--dim)}
+  .foot-inner .brand img{width:18px;height:18px}
+  .lang{font-family:var(--mono);font-size:12px;letter-spacing:.04em}
+
+  /* svg helpers — monochrome */
+  .node-pill{fill:var(--bg-2);stroke:var(--line)}
+  .node-truth{fill:rgba(255,255,255,.09);stroke:#3C3C42}
+  .node-cand{fill:transparent;stroke:#2E2E34;stroke-dasharray:4 3}
+  .node-idea{fill:transparent;stroke:#242428;stroke-dasharray:2 3}
+  .edge{stroke:#262629;stroke-width:1.4;fill:none}
+  .edge-live{stroke:#3A3A40;stroke-width:1.5;fill:none}
+  .nlab{font-family:var(--sans);font-size:12.5px;fill:var(--text)}
+  .nlab.dim{fill:var(--dim)}
+  .ntag{font-family:var(--mono);font-size:9px;letter-spacing:.08em}
+
+  /* reveal */
+  .reveal{opacity:0;transform:translateY(16px);transition:opacity .7s cubic-bezier(.2,.6,.2,1),transform .7s cubic-bezier(.2,.6,.2,1)}
+  .reveal.in{opacity:1;transform:none}
+  @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}}
+</style>
+</head>
+<body>
+<a id="top"></a>
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top"><img src="assets/zeno-logo.svg" alt="ZENO" />ZENO</a>
+    <nav class="nav-links">
+      <a class="navlink" href="#how">How it works</a>
+      <a class="navlink" href="#proof">What you get</a>
+      <a class="navlink" href="#faq">FAQ</a>
+      <a class="btn btn-primary" href="#waitlist">Request access</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-bg"><canvas id="cnet"></canvas></div>
+    <div class="wrap">
+      <span class="eyebrow reveal">Insight-first AI</span>
+      <h1 class="reveal">Make your research<br/>and planning more insightful.</h1>
+      <p class="sub reveal">Most AI tools answer your question and forget it. ZENO treats your project as a serious one — it does the digging, surfaces the assumptions worth a second look, and keeps every judgment you confirm, even as the goal shifts under you. So your research builds on itself, and your plans rest on what you've actually decided.</p>
+      <div class="hero-cta reveal">
+        <a class="btn btn-primary" href="#waitlist">Request early access <span class="arr">→</span></a>
+        <a class="btn btn-ghost" href="#how">See how it works</a>
+      </div>
+      <div class="micro reveal">V1 in development · invite-only</div>
+
+      <div class="window reveal">
+        <div class="win-bar">
+          <div class="win-dots"><span></span><span></span><span></span></div>
+          <div class="win-title">project · <b>where-to-put-my-money</b></div>
+        </div>
+        <div class="win-body">
+          <svg viewBox="0 0 960 380" width="100%" role="img" aria-label="A project graph: one vague question branching into connected topics, some confirmed as truth, some pending.">
+            <path class="edge-live" d="M150 92 C 260 92, 250 150, 330 150" />
+            <path class="edge-live" d="M150 92 C 250 92, 250 250, 330 250" />
+            <path class="edge-live" d="M470 150 C 560 150, 560 92, 650 92" />
+            <path class="edge" d="M470 250 C 560 250, 560 200, 650 200" />
+            <path class="edge" d="M790 92 C 850 92, 840 300, 720 312" />
+            <g>
+              <rect class="node-truth" x="30" y="68" width="240" height="48" rx="11"/>
+              <text class="ntag" x="46" y="86" fill="#EDEDED">TRUTH</text>
+              <text class="nlab" x="46" y="103">"How do I get stable returns?"</text>
+            </g>
+            <g>
+              <rect class="node-truth" x="330" y="126" width="140" height="48" rx="11"/>
+              <text class="ntag" x="346" y="144" fill="#EDEDED">TRUTH</text>
+              <text class="nlab" x="346" y="161">Currency risk</text>
+            </g>
+            <g>
+              <rect class="node-cand" x="330" y="226" width="160" height="48" rx="11"/>
+              <text class="ntag" x="346" y="244" fill="#9A9AA0">CANDIDATE</text>
+              <text class="nlab dim" x="346" y="261">Move assets abroad</text>
+            </g>
+            <g>
+              <rect class="node-cand" x="650" y="68" width="140" height="48" rx="11"/>
+              <text class="ntag" x="666" y="86" fill="#9A9AA0">CANDIDATE</text>
+              <text class="nlab dim" x="666" y="103">Second residency</text>
+            </g>
+            <g>
+              <rect class="node-idea" x="650" y="178" width="150" height="46" rx="11"/>
+              <text class="ntag" x="666" y="195" fill="#5E5E64">IDEA</text>
+              <text class="nlab dim" x="666" y="212">Tax exposure</text>
+            </g>
+            <g>
+              <rect class="node-idea" x="600" y="292" width="190" height="46" rx="11"/>
+              <text class="ntag" x="616" y="309" fill="#5E5E64">OPEN QUESTION</text>
+              <text class="nlab dim" x="616" y="326">Where would I actually live?</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOR strip -->
+  <div class="forstrip reveal">
+    <div class="wrap">
+      <span class="lbl">Built for the questions that change your life</span>
+      <div class="chips">
+        <span class="chip">Where to put your money</span>
+        <span class="chip">A move abroad</span>
+        <span class="chip">A career turn</span>
+        <span class="chip">A big purchase</span>
+        <span class="chip">A business idea</span>
+        <span class="chip">A research topic</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROBLEM / CONTRAST -->
+  <section>
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="eyebrow">The problem</span>
+        <h2>The question you end up needing<br/>is never the one you started with.</h2>
+        <p>"How do I get stable returns?" turns into currency risk, turns into moving assets abroad, turns into a second residency, turns into where you'd actually live. One worry branches into a dozen topics — and today's tools lose the thread every time.</p>
+      </div>
+      <div class="compare">
+        <div class="cmp old reveal">
+          <div class="tag">Single-shot tools</div>
+          <h3>Answer, then forget</h3>
+          <ul>
+            <li><span class="mk">—</span>Every question starts from zero.</li>
+            <li><span class="mk">—</span>The structure of your inquiry lives only in your head.</li>
+            <li><span class="mk">—</span>Findings scatter across disconnected chats.</li>
+            <li><span class="mk">—</span>When the goal turns, the thread breaks.</li>
+          </ul>
+        </div>
+        <div class="cmp zeno reveal">
+          <div class="tag">ZENO</div>
+          <h3>One project that holds the whole journey</h3>
+          <ul>
+            <li><span class="mk">→</span>A vague idea is caught and followed wherever it turns.</li>
+            <li><span class="mk">→</span>Each branch gets investigated, not re-derived.</li>
+            <li><span class="mk">→</span>What you confirm accumulates as durable truth.</li>
+            <li><span class="mk">→</span>The thread holds even when the goal moves 180°.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VISION BAND (README pull-quote over generative flow art) -->
+  <section class="vision">
+    <svg class="flow" id="flow" viewBox="0 0 1200 460" preserveAspectRatio="none" aria-hidden="true"></svg>
+    <div class="wrap reveal">
+      <div class="eyebrow" style="justify-content:center;margin-bottom:22px">The unit is the project</div>
+      <p class="vq">The question is what you search.<br/>The project is what you keep.</p>
+      <p class="vs">A project catches a vague idea, follows it wherever it turns, researches each branch, and accumulates what you've confirmed — so the thread never breaks, no matter how far the goal moves.</p>
+      <div class="vcred">From the ZENO manifesto</div>
+    </div>
+  </section>
+
+  <!-- PROOF / WHAT YOU GET -->
+  <section id="proof" class="sec-top">
+    <div class="wrap">
+      <div class="sec-head center reveal">
+        <span class="eyebrow">What you get</span>
+        <h2>It researches. It remembers.<br/>It shows you how it all connects.</h2>
+      </div>
+
+      <div class="feature">
+        <div class="ftext reveal">
+          <div class="fnum">01</div>
+          <h3>It does the research</h3>
+          <p>ZENO decomposes your project and chases the open questions to ground — breaking a fuzzy idea into topics and sub-questions, then investigating them for you instead of waiting for a perfectly-formed prompt.</p>
+          <div class="mech">mechanism · proactive diligence + kickoff decomposition</div>
+        </div>
+        <div class="fvis reveal">
+          <svg viewBox="0 0 460 280" aria-hidden="true">
+            <path class="edge-live" d="M86 140 C 170 140, 170 56, 300 56"/>
+            <path class="edge-live" d="M86 140 C 170 140, 170 112, 300 112"/>
+            <path class="edge-live" d="M86 140 C 170 140, 170 168, 300 168"/>
+            <path class="edge-live" d="M86 140 C 170 140, 170 224, 300 224"/>
+            <path class="edge" d="M380 56 C 420 56, 420 90, 446 90"/>
+            <path class="edge" d="M380 224 C 420 224, 420 196, 446 196"/>
+            <circle cx="62" cy="140" r="20" class="node-truth"/>
+            <text class="ntag" x="42" y="178" fill="#9A9AA0">VAGUE</text>
+            <rect class="node-pill" x="300" y="38" width="80" height="36" rx="9"/>
+            <rect class="node-pill" x="300" y="94" width="80" height="36" rx="9"/>
+            <rect class="node-pill" x="300" y="150" width="80" height="36" rx="9"/>
+            <rect class="node-pill" x="300" y="206" width="80" height="36" rx="9"/>
+            <text class="nlab dim" x="316" y="60" font-size="11">topic</text>
+            <text class="nlab dim" x="316" y="116" font-size="11">topic</text>
+            <text class="nlab dim" x="316" y="172" font-size="11">topic</text>
+            <text class="nlab dim" x="316" y="228" font-size="11">topic</text>
+            <circle cx="446" cy="90" r="5" class="node-idea"/>
+            <circle cx="446" cy="196" r="5" class="node-idea"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="feature flip">
+        <div class="ftext reveal">
+          <div class="fnum">02</div>
+          <h3>It keeps what you confirm</h3>
+          <p>Findings move through a three-stage funnel — <em>Idea → Candidate → Truth</em> — and nothing becomes truth without your explicit confirmation. Every judgment you lock in carries into every later conversation, and into every AI agent you hand the project to.</p>
+          <div class="mech">mechanism · Truth Substrate · prefer to miss than to make up</div>
+        </div>
+        <div class="fvis reveal">
+          <svg viewBox="0 0 460 280" aria-hidden="true">
+            <rect class="node-idea" x="70" y="40" width="320" height="46" rx="11"/>
+            <text class="ntag" x="88" y="60" fill="#5E5E64">IDEA</text>
+            <text class="nlab dim" x="150" y="68" font-size="12.5">noticed · low-stakes</text>
+            <text x="230" y="112" text-anchor="middle" font-size="16" fill="#5E5E64">↓</text>
+            <rect class="node-cand" x="95" y="122" width="270" height="46" rx="11"/>
+            <text class="ntag" x="113" y="142" fill="#9A9AA0">CANDIDATE</text>
+            <text class="nlab dim" x="205" y="150" font-size="12.5">awaiting you</text>
+            <text x="230" y="194" text-anchor="middle" font-size="16" fill="#5E5E64">↓</text>
+            <rect class="node-truth" x="120" y="204" width="220" height="46" rx="11"/>
+            <text class="ntag" x="138" y="224" fill="#EDEDED">TRUTH</text>
+            <text class="nlab" x="220" y="232" font-size="12.5">confirmed · durable</text>
+          </svg>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="ftext reveal">
+          <div class="fnum">03</div>
+          <h3>You see how it connects</h3>
+          <p>Your judgments are laid out as a graph you can actually read — topics, findings, and open questions positioned by how they relate. Trace any branch back to the question that spawned it, even after the goal has turned. One place where details live: no modals, no nested panels.</p>
+          <div class="mech">mechanism · Truth Graph · "understand it at a glance"</div>
+        </div>
+        <div class="fvis reveal">
+          <svg viewBox="0 0 460 280" aria-hidden="true">
+            <path class="edge-live" d="M96 92 C 180 92, 170 150, 250 150"/>
+            <path class="edge-live" d="M96 92 C 200 92, 220 70, 340 70"/>
+            <path class="edge" d="M250 150 C 320 150, 320 210, 372 210"/>
+            <path class="edge" d="M96 92 C 130 92, 130 206, 168 206"/>
+            <path class="edge" d="M340 70 C 380 70, 392 118, 410 130"/>
+            <circle cx="84" cy="92" r="16" class="node-truth"/>
+            <circle cx="340" cy="70" r="13" class="node-cand"/>
+            <circle cx="250" cy="150" r="16" class="node-truth"/>
+            <circle cx="372" cy="210" r="11" class="node-idea"/>
+            <circle cx="168" cy="206" r="10" class="node-idea"/>
+            <circle cx="416" cy="132" r="6" class="node-idea"/>
+            <text class="ntag" x="58" y="130" fill="#EDEDED">truth</text>
+            <text class="ntag" x="316" y="50" fill="#9A9AA0">candidate</text>
+            <text class="ntag" x="150" y="238" fill="#5E5E64">open q.</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section id="how" class="sec-top">
+    <div class="wrap">
+      <div class="sec-head center reveal">
+        <span class="eyebrow">How it works</span>
+        <h2>Start vague. End grounded.</h2>
+        <p>One loop you stay in for the life of the project — start fuzzy, investigate, confirm, and inherit it forever.</p>
+      </div>
+      <div class="steps">
+        <div class="step reveal"><div class="si">01</div><h4>Start a project</h4><p>Bring a vague idea. No well-formed question required.</p></div>
+        <div class="step reveal"><div class="si">02</div><h4>Investigate</h4><p>ZENO breaks it into topics and digs into the open questions.</p></div>
+        <div class="step reveal"><div class="si">03</div><h4>Confirm</h4><p>Promote only what you decide is true. Truth is read-only after.</p></div>
+        <div class="step reveal"><div class="si">04</div><h4>Inherit</h4><p>Every future session starts already knowing what you've decided.</p></div>
+        <div class="step reveal"><div class="si">05</div><h4>Re-check</h4><p>Watchtower re-verifies assumptions that depend on a moving world.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BENEFITS -->
+  <section class="sec-top">
+    <div class="wrap">
+      <div class="sec-head center reveal">
+        <span class="eyebrow">Why it's different</span>
+        <h2>Built around the project,<br/>not the chat.</h2>
+      </div>
+      <div class="bgrid">
+        <div class="bcard reveal"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg></div><h4>A project, not a question</h4><p>Topics, findings, and open questions held as one living structure — not a fresh chat each time.</p></div>
+        <div class="bcard reveal"><div class="ic"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></div><h4>Confirmed before it's truth</h4><p>Nothing enters project truth on its own. You promote a candidate; ZENO never auto-writes.</p></div>
+        <div class="bcard reveal"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="9" r="2.4"/><circle cx="9" cy="18" r="2.4"/><path d="M8 7l8 1M8 8l1 8"/></svg></div><h4>A graph you can read</h4><p>See how every branch connects back to the question that spawned it — at a glance.</p></div>
+        <div class="bcard reveal"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2M4 7h16M4 7v12a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V7"/></svg></div><h4>Context that inherits</h4><p>Future sessions arrive already knowing what you decided, ruled out, and why — no pasting.</p></div>
+        <div class="bcard reveal"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8.5"/></svg></div><h4>Re-research on a schedule</h4><p>Standing checks, not one-time passes — ZENO flags when a confirmed assumption no longer holds.</p></div>
+        <div class="bcard reveal"><div class="ic"><svg viewBox="0 0 24 24"><path d="m8 16-4-4 4-4M16 8l4 4-4 4M14 5l-4 14"/></svg></div><h4>Feeds coding agents</h4><p>If the project ends in something to build, the same confirmed truth feeds Claude Code, Cursor, or Codex via MCP — downstream, not the point.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHAT ZENO IS NOT -->
+  <section class="sec-top">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="eyebrow">Plainly</span>
+        <h2>What ZENO is not.</h2>
+        <p>It's a narrow tool on purpose. Knowing what it refuses to be is the fastest way to know if it's for you.</p>
+      </div>
+      <div class="notgrid">
+        <div class="notitem reveal"><span class="x">×</span><div><b>Not a single-question research tool.</b> Perplexity, Deep Research, and plain chat answer one question and forget the rest. ZENO holds the whole project.</div></div>
+        <div class="notitem reveal"><span class="x">×</span><div><b>Not a chat-history wrapper</b> with "memory" branding. Truth is what you explicitly confirm — not whatever's left in the window.</div></div>
+        <div class="notitem reveal"><span class="x">×</span><div><b>Not a task manager.</b> ZENO helps you think a decision through; it doesn't run your to-dos or execute anything.</div></div>
+        <div class="notitem reveal"><span class="x">×</span><div><b>Not a coding-agent competitor.</b> It can feed them context, but that's a downstream path — not why ZENO exists.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" class="sec-top">
+    <div class="wrap" style="max-width:840px">
+      <div class="sec-head reveal">
+        <span class="eyebrow">FAQ</span>
+        <h2>Questions, answered.</h2>
+      </div>
+      <div class="faq reveal">
+        <details><summary>Who is ZENO for? <span class="plus"></span></summary><div class="faq-a">Anyone running a real, evolving inquiry that's important enough to research properly and open-ended enough to change shape as you learn — money, a move abroad, a career turn, a big purchase, a business idea, a research question. It rewards people who want to think rigorously, not just get a quick answer.</div></details>
+        <details><summary>How is this different from Perplexity or ChatGPT? <span class="plus"></span></summary><div class="faq-a">Those answer one question at a time and forget the rest. ZENO is built around the <em>project</em> — a living structure of topics, findings, and confirmed judgment that persists across sessions and holds together even when your goal turns 180°.</div></details>
+        <details><summary>Does it decide things for me? <span class="plus"></span></summary><div class="faq-a">No. ZENO researches, structures, and surfaces the assumptions worth a second look — you decide what's true. Nothing becomes project truth without your explicit confirmation. Its autonomy is read-only.</div></details>
+        <details><summary>What happens when my goal changes? <span class="plus"></span></summary><div class="faq-a">That's the point. The project catches a vague idea and follows it wherever it turns. Earlier branches stay connected, and what you've confirmed keeps accumulating — so you never re-derive it and the thread never breaks.</div></details>
+        <details><summary>I'm a developer — can it feed my coding agents? <span class="plus"></span></summary><div class="faq-a">Yes. The same confirmed project truth is exposed to Claude Code, Cursor, or Codex via MCP, candidate-first: agents propose, you confirm. But that's a secondary, downstream path — ZENO is a research workspace first.</div></details>
+        <details><summary>Is it available now? <span class="plus"></span></summary><div class="faq-a">V1 is in active development and invite-only. Request early access below and we'll reach out as invites open.</div></details>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section id="waitlist" class="final">
+    <div class="wrap">
+      <div class="final-card reveal">
+        <canvas id="cnet2"></canvas>
+        <div class="inner">
+          <span class="eyebrow" style="justify-content:center">Early access</span>
+          <h2 style="margin-top:18px">Make your next big decision<br/>an insightful one.</h2>
+          <p>Join the waitlist. Invites open as V1 stabilizes.</p>
+          <form class="wl" id="wl">
+            <input type="email" name="email" placeholder="you@email.com" aria-label="Email" required />
+            <button class="btn btn-primary" type="submit">Request early access</button>
+          </form>
+          <div class="wl-ok" id="wl-ok">✓ You're on the list. We'll reach out as invites open.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot-inner">
+    <a class="brand" href="#top"><img src="assets/zeno-logo.svg" alt="ZENO" />ZENO</a>
+    <span>© 2026 ZENO · Insight-first AI for long-cycle projects.</span>
+    <span class="lang">EN · 中文 · FR</span>
+  </div>
+</footer>
+
+<div class="grain"></div>
+
+<script>
+  // scroll reveal
+  const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{threshold:.12,rootMargin:'0px 0px -6% 0px'});
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+  // generative node constellation (monochrome) — used for hero + CTA
+  const REDUCE = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function makeNet(canvas, opts){
+    if(!canvas) return;
+    opts = opts || {};
+    const ctx = canvas.getContext('2d');
+    const DPR = Math.min(2, window.devicePixelRatio || 1);
+    let W=0,H=0,P=[],raf=null;
+    const LINK = opts.link || 130;
+    const ALPHA = opts.alpha || 0.13;
+    function size(){
+      const host = canvas.parentElement;
+      const r = host.getBoundingClientRect();
+      W = r.width; H = r.height || 1;
+      canvas.width = W*DPR; canvas.height = H*DPR;
+      ctx.setTransform(DPR,0,0,DPR,0,0);
+    }
+    function seed(){
+      const density = opts.density || 17;
+      const n = Math.max(20, Math.min(72, Math.round((W*H)/(density*1100))));
+      P = [];
+      for(let i=0;i<n;i++) P.push({x:Math.random()*W, y:Math.random()*H, vx:(Math.random()-.5)*0.15, vy:(Math.random()-.5)*0.15, r:Math.random()*1.5+0.5});
+    }
+    function draw(){
+      ctx.clearRect(0,0,W,H);
+      for(const p of P){ p.x+=p.vx; p.y+=p.vy; if(p.x<0||p.x>W)p.vx*=-1; if(p.y<0||p.y>H)p.vy*=-1; }
+      for(let i=0;i<P.length;i++){
+        for(let j=i+1;j<P.length;j++){
+          const a=P[i], b=P[j], dx=a.x-b.x, dy=a.y-b.y, d=Math.hypot(dx,dy);
+          if(d<LINK){ ctx.globalAlpha=(1-d/LINK)*ALPHA; ctx.strokeStyle='#fff'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
+        }
+      }
+      for(const p of P){ ctx.globalAlpha=0.55; ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); }
+      ctx.globalAlpha=1;
+      if(!REDUCE) raf=requestAnimationFrame(draw);
+    }
+    function boot(){ size(); seed(); if(raf)cancelAnimationFrame(raf); draw(); }
+    boot();
+    let t; window.addEventListener('resize',()=>{ clearTimeout(t); t=setTimeout(boot,200); });
+  }
+  makeNet(document.getElementById('cnet'),  {density:15, link:135, alpha:0.14});
+  makeNet(document.getElementById('cnet2'), {density:26, link:120, alpha:0.12});
+
+  // generative flow-line field for the vision band
+  (function(){
+    const flow = document.getElementById('flow'); if(!flow) return;
+    const W=1200, H=460, lines=30; let s='';
+    for(let i=0;i<lines;i++){
+      const y=H*(i+0.5)/lines;
+      const amp=14+Math.sin(i*0.55)*20+Math.cos(i*0.21)*8;
+      const seg=10; let d='M0 '+y.toFixed(1);
+      for(let k=1;k<=seg;k++){
+        const x=W*k/seg, cx=W*(k-0.5)/seg;
+        const cy=y+Math.sin((k-0.5)*1.25+i*0.6)*amp;
+        const yy=y+Math.sin(k*1.25+i*0.6)*amp;
+        d+=' Q '+cx.toFixed(1)+' '+cy.toFixed(1)+' '+x.toFixed(1)+' '+yy.toFixed(1);
+      }
+      const op=(0.04+((i%6))*0.011).toFixed(3);
+      s+='<path d="'+d+'" fill="none" stroke="#ffffff" stroke-width="1" opacity="'+op+'"/>';
+    }
+    flow.innerHTML=s;
+  })();
+
+  // waitlist → Formspree.  STEP: replace YOUR_FORM_ID with your real Formspree form id
+  // (create a free form at https://formspree.io → it gives you https://formspree.io/f/abcdwxyz).
+  const FORMSPREE_ENDPOINT = "https://formspree.io/f/xykqwqvk";
+  const f=document.getElementById('wl'), ok=document.getElementById('wl-ok');
+  const btn=f.querySelector('button');
+  f.addEventListener('submit', async (ev)=>{
+    ev.preventDefault();
+    const email=f.querySelector('input[type=email]').value.trim();
+    if(!email) return;
+    // Not configured yet → still demo the success state locally.
+    if(FORMSPREE_ENDPOINT.includes('YOUR_FORM_ID')){
+      f.style.display='none'; ok.style.display='block';
+      console.warn('Formspree not configured yet — set FORMSPREE_ENDPOINT. Captured (demo only):', email);
+      return;
+    }
+    btn.disabled=true; const label=btn.textContent; btn.textContent='Sending…';
+    try{
+      const res=await fetch(FORMSPREE_ENDPOINT,{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body:JSON.stringify({email})
+      });
+      if(res.ok){ f.style.display='none'; ok.style.display='block'; }
+      else { btn.disabled=false; btn.textContent=label; alert('Something went wrong — please try again.'); }
+    }catch(_){ btn.disabled=false; btn.textContent=label; alert('Network error — please try again.'); }
+  });
+</script>
+</body>
+</html>
