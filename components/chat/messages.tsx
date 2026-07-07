@@ -3,7 +3,6 @@ import { ArrowDownIcon } from "lucide-react";
 import { Fragment, useEffect, useRef } from "react";
 import { useLocale } from "@/components/i18n/locale-provider";
 import { KickoffBanner } from "@/components/kickoff/kickoff-banner";
-import { useWorkspace } from "@/components/workspace/workspace-provider";
 import { useMessages } from "@/hooks/use-messages";
 import { chatModels } from "@/lib/ai/models";
 import type { Vote } from "@/lib/db/schema";
@@ -66,7 +65,6 @@ function PureMessages({
   compactedThroughMessageId,
   modelByMessageId,
 }: MessagesProps) {
-  const { restoredSandboxContext } = useWorkspace();
   const { t } = useLocale();
   const {
     containerRef: messagesContainerRef,
@@ -113,19 +111,6 @@ function PureMessages({
         ref={messagesContainerRef}
       >
         <div className="mx-auto flex min-h-full min-w-0 max-w-4xl flex-col gap-5 px-2 py-6 pt-16 md:gap-7 md:px-4">
-          {restoredSandboxContext && (
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-4 text-sm">
-              <p className="font-medium text-foreground">
-                {t("chat.sandboxNextMessage", {
-                  title: restoredSandboxContext.decisionTitle,
-                })}
-              </p>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">
-                {restoredSandboxContext.contextText}
-              </p>
-            </div>
-          )}
-
           <KickoffBanner
             hasAnswers={messages.some(
               (message) =>

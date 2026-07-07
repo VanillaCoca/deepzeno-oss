@@ -176,6 +176,27 @@ export function getIRTypeLabel(kind: IRKind, subtype?: IRPlanSubtype | null) {
   }
 }
 
+// i18n key for a node's type label, resolved via t() so it tracks the language
+// switcher. Mirrors getIRTypeLabel's kind/subtype mapping.
+export function getIRKindKey(
+  kind: IRKind,
+  subtype?: IRPlanSubtype | null
+): string {
+  if (kind === "plan") {
+    if (subtype === "decision") {
+      return "ir.kind.decision";
+    }
+    if (subtype === "task") {
+      return "ir.kind.task";
+    }
+    if (subtype === "milestone") {
+      return "ir.kind.milestone";
+    }
+    return "ir.kind.plan";
+  }
+  return `ir.kind.${kind}`;
+}
+
 export function getIRGroupLabel(kind: IRKind, subtype?: IRPlanSubtype | null) {
   const label = getIRTypeLabel(kind, subtype);
   return label.endsWith("s") ? label : `${label}s`;

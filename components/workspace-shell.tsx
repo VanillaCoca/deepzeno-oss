@@ -112,7 +112,7 @@ export function WorkspaceShell({
           <div className="relative flex h-dvh min-w-0">
             <div className="relative flex min-w-0 flex-1 flex-col">
               <WorkspaceHeader
-                onOpenDrawer={() => setDrawerOpen(true)}
+                onOpenDrawer={() => setDrawerOpen((current) => !current)}
                 onViewChange={setView}
                 view={activeView}
               />

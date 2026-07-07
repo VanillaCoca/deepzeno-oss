@@ -1,26 +1,29 @@
 "use client";
 
-import { ChevronDownIcon, ChevronRightIcon, XIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ChevronRightIcon, MessageSquareIcon, XIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
+import { useLocale } from "@/components/i18n/locale-provider";
 import { IRDetailPane } from "@/components/ir/ir-detail";
 import { irNodeKey, useIR } from "@/components/ir/ir-provider";
 import { kindPresentation } from "@/components/ir/kind-presentation";
 import { postJSON, useIRActions } from "@/components/ir/use-ir-actions";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace/workspace-provider";
+import { getIRKindKey } from "@/lib/ir/types";
 import type { IRDetail, IRNode } from "@/lib/ir/types";
 import { cn, fetcher } from "@/lib/utils";
 
-function notePreview(node: IRNode): string | null {
-  const raw = node.rationale ?? node.content ?? "";
-  const text = raw.replace(/\s+/g, " ").trim();
-  if (!text || text.startsWith("{") || text.startsWith("[")) {
-    return null;
-  }
-  return text.length > 90 ? `${text.slice(0, 89)}…` : text;
-}
+const LOCALE_TAG: Record<string, string> = {
+  en: "en-US",
+  zh: "zh-CN",
+  fr: "fr-FR",
+};
 
+// A candidate/idea row. The statement (title) is the focus; the type label is a
+// localized pill; provenance ("from conversation · date") replaces the internal
+// extraction note the list used to surface. Full content/rationale lives in the
+// detail pane on click, so the list stays scannable, not bloated.
 function NodeButton({
   node,
   selected,
@@ -30,8 +33,17 @@ function NodeButton({
   selected: boolean;
   onSelect: (id: string) => void;
 }) {
-  const { label, color } = kindPresentation(node.kind, node.subtype);
-  const preview = notePreview(node);
+  const { t, locale } = useLocale();
+  const { color } = kindPresentation(node.kind, node.subtype);
+  const label = t(getIRKindKey(node.kind, node.subtype));
+  const fromChat = Boolean(node.sourceChatId);
+  const dateLabel = fromChat
+    ? new Date(node.createdAt).toLocaleDateString(
+        LOCALE_TAG[locale] ?? "en-US",
+        { day: "numeric", month: "short" }
+      )
+    : null;
+
   return (
     <button
       className={cn(
@@ -43,7 +55,7 @@ function NodeButton({
       title={node.title}
       type="button"
     >
-      <span className="flex items-center gap-1.5 text-[11px] text-[var(--ir-text-tertiary)]">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--ir-border-default)] bg-[var(--ir-bg-elevated)] px-2 py-0.5 text-[11px] text-[var(--ir-text-secondary)]">
         <span
           className="size-1.5 rounded-full"
           style={{ backgroundColor: color }}
@@ -52,53 +64,24 @@ function NodeButton({
       </span>
       <div
         className={cn(
-          "mt-1 text-[13.5px] leading-[1.4] text-[var(--ir-text-primary)]",
+          "mt-2 font-medium text-[13.5px] text-[var(--ir-text-primary)] leading-[1.45]",
           node.status === "superseded" &&
             "text-[var(--ir-text-tertiary)] line-through",
-          node.status === "idea" && "text-[var(--ir-text-secondary)]"
+          node.status === "idea" &&
+            "font-normal text-[var(--ir-text-secondary)]"
         )}
       >
         {node.title}
       </div>
-      {preview ? (
-        <div className="mt-1 truncate text-xs text-[var(--ir-text-tertiary)]">
-          {preview}
+      {fromChat ? (
+        <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[var(--ir-text-tertiary)]">
+          <MessageSquareIcon className="size-3 shrink-0" />
+          <span>
+            {t("ir.from.conversation")}
+            {dateLabel ? ` · ${dateLabel}` : ""}
+          </span>
         </div>
       ) : null}
-    </button>
-  );
-}
-
-function ZoneHeader({
-  count,
-  expanded,
-  hidden,
-  label,
-  onToggle,
-}: {
-  count: number;
-  expanded: boolean;
-  hidden?: boolean;
-  label: string;
-  onToggle: () => void;
-}) {
-  if (hidden) {
-    return null;
-  }
-
-  return (
-    <button
-      className="flex h-8 w-full items-center gap-2 px-1 text-left text-[13px] font-medium text-[var(--ir-text-secondary)]"
-      onClick={onToggle}
-      type="button"
-    >
-      {expanded ? (
-        <ChevronDownIcon className="size-3.5" />
-      ) : (
-        <ChevronRightIcon className="size-3.5" />
-      )}
-      <span>{label}</span>
-      <span className="text-[var(--ir-text-tertiary)]">({count})</span>
     </button>
   );
 }
@@ -273,13 +256,12 @@ export function IRDrawer({
     unassignedIdeas,
   } = useIR();
   const { activeProjectId } = useWorkspace();
-  const [ideasExpanded, setIdeasExpanded] = useState(false);
-  const [candidatesExpanded, setCandidatesExpanded] = useState(true);
-  const [unassignedExpanded, setUnassignedExpanded] = useState(false);
+  const [tab, setTab] = useState<"candidates" | "ideas">("candidates");
   const [reEntrySnapshot, setReEntrySnapshot] =
     useState<ReEntrySnapshot | null>(null);
   const [reEntryDismissed, setReEntryDismissed] = useState(false);
   const [reEntryExpanded, setReEntryExpanded] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const { data: detail, mutate: mutateDetail } = useSWR<IRDetail>(
     irNodeKey(selectedNodeId),
@@ -301,11 +283,15 @@ export function IRDrawer({
     ) ?? null;
   const actions = useIRActions(selectedDrawerNode, mutateDetail);
 
-  useEffect(() => {
-    if (unassignedPool.length > 0) {
-      setUnassignedExpanded(true);
-    }
-  }, [unassignedPool.length]);
+  const candidatesTab = useMemo(
+    () => [...candidates, ...unassignedCandidates],
+    [candidates, unassignedCandidates]
+  );
+  const ideasTab = useMemo(
+    () => [...ideas, ...unassignedIdeas],
+    [ideas, unassignedIdeas]
+  );
+  const activeList = tab === "candidates" ? candidatesTab : ideasTab;
 
   useEffect(() => {
     if (!activeProjectId) {
@@ -354,6 +340,35 @@ export function IRDrawer({
     };
   }, [activeProjectId]);
 
+  // Outside-click / Escape closes the floating card (non-modal, like a popover).
+  // The trigger pill is exempt so its own toggle handler isn't double-fired.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    function onPointerDown(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+      if (!target || cardRef.current?.contains(target)) {
+        return;
+      }
+      if (target.closest('[data-testid="ir-drawer-trigger"]')) {
+        return;
+      }
+      onClose();
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, onClose]);
+
   async function markReEntrySeen() {
     if (!activeProjectId) {
       return;
@@ -370,167 +385,114 @@ export function IRDrawer({
   }
 
   function handleReEntryGoTo(zone: "ideas" | "candidates" | "truth") {
-    // Truth nodes now live in the TruthGraphStage center view, not the drawer.
-    // Switch the workspace to the truth-graph view (which also closes the
-    // drawer) instead of scrolling to a zone that no longer exists.
+    // Truth nodes live in the TruthGraphStage; switch the workspace to it
+    // (which also closes this card). Ideas/candidates just flip the tab.
     if (zone === "truth") {
       onNavigateToTruth?.();
       return;
     }
+    setTab(zone);
+  }
 
-    if (zone === "ideas") {
-      setIdeasExpanded(true);
-    }
-
-    if (zone === "candidates") {
-      setCandidatesExpanded(true);
-    }
-
-    requestAnimationFrame(() => {
-      document
-        .querySelector<HTMLElement>(`[data-testid="ir-${zone}-zone"]`)
-        ?.scrollIntoView({ block: "start", behavior: "smooth" });
-    });
+  if (!open) {
+    return null;
   }
 
   return (
-    <>
-      {open ? (
-        <button
-          aria-label="Close panel"
-          className="fixed inset-0 z-30 bg-black/20"
-          onClick={onClose}
-          type="button"
-        />
-      ) : null}
-      <aside
-        aria-hidden={!open}
-        className={cn(
-          "fixed inset-y-0 right-0 z-40 flex w-[420px] max-w-[90vw] flex-col border-l border-[var(--ir-border-default)] bg-[var(--ir-bg-panel)] shadow-xl transition-transform duration-200",
-          open ? "translate-x-0" : "pointer-events-none translate-x-full"
-        )}
-        data-testid="ir-drawer"
-        inert={!open}
-      >
-        <header className="flex items-center justify-between border-b border-[var(--ir-border-default)] px-4 py-3">
-          <span className="text-sm font-medium text-[var(--ir-text-primary)]">
-            Ideas & Candidates
-          </span>
-          <Button
-            aria-label="Close"
-            className="rounded border border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
-            onClick={onClose}
-            size="icon-sm"
-            variant="outline"
+    <div
+      className="fade-in-0 zoom-in-95 fixed top-14 right-3 z-40 flex max-h-[calc(100dvh-4.5rem)] w-[340px] max-w-[calc(100vw-1.5rem)] origin-top-right animate-in flex-col overflow-hidden rounded-2xl border border-[var(--ir-border-strong)] bg-[var(--ir-bg-panel)] shadow-xl duration-150"
+      data-testid="ir-drawer"
+      ref={cardRef}
+    >
+      <header className="flex items-center justify-between gap-2 border-b border-[var(--ir-border-default)] px-3 py-2.5">
+        <div className="inline-flex rounded-lg border border-[var(--ir-border-default)] bg-[var(--ir-bg-elevated)] p-0.5 text-xs">
+          <button
+            className={cn(
+              "rounded-md px-2.5 py-1 font-medium transition-colors",
+              tab === "candidates"
+                ? "bg-[var(--ir-bg-panel)] text-[var(--ir-text-primary)] shadow-sm"
+                : "text-[var(--ir-text-secondary)] hover:text-[var(--ir-text-primary)]"
+            )}
+            onClick={() => setTab("candidates")}
+            type="button"
           >
-            <XIcon className="size-4" />
-          </Button>
-        </header>
-
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {shouldShowReEntry(reEntrySnapshot, reEntryDismissed) &&
-          reEntrySnapshot ? (
-            <ReEntryBanner
-              expanded={reEntryExpanded}
-              onDismiss={markReEntrySeen}
-              onGoTo={handleReEntryGoTo}
-              onToggleExpanded={() => setReEntryExpanded(true)}
-              snapshot={reEntrySnapshot}
-            />
-          ) : null}
-
-          <div className="flex flex-col px-0 py-2">
-            <ZoneHeader
-              count={ideas.length}
-              expanded={ideasExpanded}
-              label="Ideas"
-              onToggle={() => setIdeasExpanded((current) => !current)}
-            />
-            {ideasExpanded ? (
-              <div className="mb-2" data-testid="ir-ideas-zone">
-                {ideas.length === 0 && !isLoading ? (
-                  <p className="px-3.5 py-2 text-sm text-[var(--ir-text-tertiary)]">
-                    No ideas yet.
-                  </p>
-                ) : null}
-                {ideas.slice(0, 10).map((node) => (
-                  <NodeButton
-                    key={node.id}
-                    node={node}
-                    onSelect={selectNode}
-                    selected={selectedNodeId === node.id}
-                  />
-                ))}
-                {ideas.length > 10 ? (
-                  <button
-                    className="px-3.5 py-2 text-xs text-[var(--ir-text-tertiary)]"
-                    type="button"
-                  >
-                    + {ideas.length - 10} more
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-
-            <ZoneHeader
-              count={candidates.length}
-              expanded={candidatesExpanded}
-              label="Candidates"
-              onToggle={() => setCandidatesExpanded((current) => !current)}
-            />
-            {candidatesExpanded ? (
-              <div className="mb-3" data-testid="ir-candidates-zone">
-                {candidates.length === 0 && !isLoading ? (
-                  <p className="px-3.5 py-2 text-sm text-[var(--ir-text-tertiary)]">
-                    No pending candidates.
-                  </p>
-                ) : null}
-                {candidates.map((node) => (
-                  <NodeButton
-                    key={node.id}
-                    node={node}
-                    onSelect={selectNode}
-                    selected={selectedNodeId === node.id}
-                  />
-                ))}
-              </div>
-            ) : null}
-
-            {unassignedPool.length > 0 ? (
-              <>
-                <ZoneHeader
-                  count={unassignedPool.length}
-                  expanded={unassignedExpanded}
-                  label="Unassigned pool"
-                  onToggle={() => setUnassignedExpanded((current) => !current)}
-                />
-                {unassignedExpanded ? (
-                  <div className="mb-3" data-testid="ir-unassigned-zone">
-                    {unassignedPool.map((node) => (
-                      <NodeButton
-                        key={node.id}
-                        node={node}
-                        onSelect={selectNode}
-                        selected={selectedNodeId === node.id}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-          </div>
+            Candidates{" "}
+            <span className="text-[var(--ir-text-tertiary)]">
+              {candidatesTab.length}
+            </span>
+          </button>
+          <button
+            className={cn(
+              "rounded-md px-2.5 py-1 font-medium transition-colors",
+              tab === "ideas"
+                ? "bg-[var(--ir-bg-panel)] text-[var(--ir-text-primary)] shadow-sm"
+                : "text-[var(--ir-text-secondary)] hover:text-[var(--ir-text-primary)]"
+            )}
+            onClick={() => setTab("ideas")}
+            type="button"
+          >
+            Ideas{" "}
+            <span className="text-[var(--ir-text-tertiary)]">
+              {ideasTab.length}
+            </span>
+          </button>
         </div>
+        <Button
+          aria-label="Close"
+          className="rounded border border-[var(--ir-border-strong)] bg-transparent hover:bg-[var(--ir-bg-hover)]"
+          onClick={onClose}
+          size="icon-sm"
+          variant="outline"
+        >
+          <XIcon className="size-4" />
+        </Button>
+      </header>
 
-        {selectedDrawerNode ? (
-          <div className="h-2/5 min-h-[220px] overflow-auto border-t border-[var(--ir-border-default)]">
-            <IRDetailPane
-              actions={actions}
-              detail={detail}
-              selectedNode={selectedDrawerNode}
-            />
-          </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {shouldShowReEntry(reEntrySnapshot, reEntryDismissed) &&
+        reEntrySnapshot ? (
+          <ReEntryBanner
+            expanded={reEntryExpanded}
+            onDismiss={markReEntrySeen}
+            onGoTo={handleReEntryGoTo}
+            onToggleExpanded={() => setReEntryExpanded(true)}
+            snapshot={reEntrySnapshot}
+          />
         ) : null}
-      </aside>
-    </>
+
+        <div className="py-1" data-testid={`ir-${tab}-zone`}>
+          {activeList.length === 0 && !isLoading ? (
+            <p className="px-3.5 py-6 text-center text-sm text-[var(--ir-text-tertiary)]">
+              {tab === "candidates"
+                ? "No pending candidates."
+                : "No ideas yet."}
+            </p>
+          ) : null}
+          {activeList.slice(0, tab === "ideas" ? 12 : 50).map((node) => (
+            <NodeButton
+              key={node.id}
+              node={node}
+              onSelect={selectNode}
+              selected={selectedNodeId === node.id}
+            />
+          ))}
+          {tab === "ideas" && ideasTab.length > 12 ? (
+            <p className="px-3.5 py-2 text-xs text-[var(--ir-text-tertiary)]">
+              + {ideasTab.length - 12} more
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      {selectedDrawerNode ? (
+        <div className="max-h-[45%] min-h-[200px] shrink-0 overflow-auto border-t border-[var(--ir-border-default)]">
+          <IRDetailPane
+            actions={actions}
+            detail={detail}
+            selectedNode={selectedDrawerNode}
+          />
+        </div>
+      ) : null}
+    </div>
   );
 }

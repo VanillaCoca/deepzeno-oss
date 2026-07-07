@@ -1,126 +1,152 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useLocale } from "@/components/i18n/locale-provider";
+import { cn } from "@/lib/utils";
 
-// Login-page right panel. Replaces the old "Powered by Vercel" preview with a
-// quiet, monochrome art piece true to ZENO: a "decision constellation" that
+// Login-page right panel. A quiet, monochrome "decision constellation" that
 // grows upward — outlined nodes are candidates, filled nodes are confirmed
-// truths, converging on a single apex. Pure SVG + CSS, theme-adaptive via
-// `currentColor`, with a restrained draw-in on load that stands down for
-// `prefers-reduced-motion` (keyframes live in globals.css). The tagline is
-// localized, so it tracks the language switcher live.
+// truths, converging on a single apex. Several variants are generated
+// deterministically (seeded PRNG, so SSR and the client agree — no hydration
+// mismatch) and slowly cross-fade + redraw on a timer so the panel changes over
+// time. The draw-in keyframes live in globals.css and stand down for
+// prefers-reduced-motion; the cross-fade timer is gated on it too. Tagline is
+// localized, tracking the language switcher live.
 
 type NodeKind = "cand" | "conf" | "apex";
-type GraphNode = { id: string; x: number; y: number; kind: NodeKind };
+type ConNode = { x: number; y: number; kind: NodeKind };
+type ConEdge = { x1: number; y1: number; x2: number; y2: number };
+type Constellation = { nodes: ConNode[]; edges: ConEdge[] };
 
-const NODES: GraphNode[] = [
-  // roots / candidates fanning across the base
-  { id: "a1", x: 60, y: 686, kind: "cand" },
-  { id: "a2", x: 118, y: 674, kind: "cand" },
-  { id: "a3", x: 180, y: 690, kind: "cand" },
-  { id: "a4", x: 244, y: 676, kind: "cand" },
-  { id: "a5", x: 306, y: 688, kind: "cand" },
-  { id: "a6", x: 360, y: 672, kind: "cand" },
-  { id: "b1", x: 90, y: 626, kind: "cand" },
-  { id: "b2", x: 152, y: 614, kind: "conf" },
-  { id: "b3", x: 214, y: 630, kind: "cand" },
-  { id: "b4", x: 280, y: 616, kind: "cand" },
-  { id: "b5", x: 340, y: 628, kind: "cand" },
-  { id: "c1", x: 64, y: 558, kind: "cand" },
-  { id: "c2", x: 128, y: 548, kind: "cand" },
-  { id: "c3", x: 196, y: 562, kind: "conf" },
-  { id: "c4", x: 258, y: 546, kind: "cand" },
-  { id: "c5", x: 322, y: 560, kind: "cand" },
-  { id: "c6", x: 372, y: 548, kind: "cand" },
-  { id: "d1", x: 100, y: 488, kind: "cand" },
-  { id: "d2", x: 168, y: 476, kind: "conf" },
-  { id: "d3", x: 236, y: 492, kind: "conf" },
-  { id: "d4", x: 300, y: 478, kind: "cand" },
-  { id: "d5", x: 356, y: 494, kind: "cand" },
-  { id: "e1", x: 132, y: 416, kind: "cand" },
-  { id: "e2", x: 200, y: 404, kind: "conf" },
-  { id: "e3", x: 268, y: 420, kind: "conf" },
-  { id: "e4", x: 330, y: 408, kind: "cand" },
-  { id: "f1", x: 168, y: 348, kind: "conf" },
-  { id: "f2", x: 236, y: 336, kind: "conf" },
-  { id: "f3", x: 300, y: 352, kind: "conf" },
-  { id: "g1", x: 210, y: 278, kind: "conf" },
-  { id: "g2", x: 274, y: 264, kind: "conf" },
-  { id: "h1", x: 250, y: 200, kind: "conf" },
-  { id: "ax", x: 282, y: 128, kind: "apex" },
+function mulberry32(seed: number) {
+  let a = seed;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
+// Builds a lattice that narrows from a wide base to a single apex. Row counts
+// shape the silhouette; the seed jitters positions and picks which nodes read
+// as confirmed vs candidate — higher rows lean confirmed, converging on truth.
+function buildConstellation(
+  seed: number,
+  rowCounts: number[],
+  opts: { baseSpread: number; topSpread: number; jitterX?: number }
+): Constellation {
+  const rand = mulberry32(seed);
+  const { baseSpread, topSpread, jitterX = 14 } = opts;
+  const topY = 132;
+  const botY = 688;
+  const cx = 210;
+  const rows = rowCounts.length;
+  const grid: ConNode[][] = [];
+  const nodes: ConNode[] = [];
+
+  for (let r = 0; r < rows; r += 1) {
+    const tt = rows === 1 ? 0 : r / (rows - 1);
+    const y = botY + (topY - botY) * tt + (rand() - 0.5) * 10;
+    const spread = baseSpread + (topSpread - baseSpread) * tt;
+    const count = rowCounts[r];
+    const row: ConNode[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const fx = count === 1 ? 0.5 : i / (count - 1);
+      const x = cx + (fx - 0.5) * spread + (rand() - 0.5) * jitterX;
+      let kind: NodeKind;
+      if (r === rows - 1 && count === 1) {
+        kind = "apex";
+      } else if (tt > 0.5) {
+        kind = rand() > 0.32 ? "conf" : "cand";
+      } else {
+        kind = rand() > 0.82 ? "conf" : "cand";
+      }
+      const node: ConNode = { x, y, kind };
+      row.push(node);
+      nodes.push(node);
+    }
+    grid.push(row);
+  }
+
+  const edges: ConEdge[] = [];
+  for (let r = 0; r < rows - 1; r += 1) {
+    const up = grid[r + 1];
+    for (const n of grid[r]) {
+      const sorted = [...up].sort(
+        (p, q) => Math.abs(p.x - n.x) - Math.abs(q.x - n.x)
+      );
+      const links = 1 + (rand() > 0.5 ? 1 : 0);
+      for (let j = 0; j < Math.min(links, sorted.length); j += 1) {
+        edges.push({ x1: n.x, y1: n.y, x2: sorted[j].x, y2: sorted[j].y });
+      }
+    }
+  }
+
+  return { nodes, edges };
+}
+
+const VARIANTS: Constellation[] = [
+  buildConstellation(1, [6, 5, 6, 5, 4, 3, 2, 1], {
+    baseSpread: 340,
+    topSpread: 64,
+  }),
+  buildConstellation(7, [5, 6, 5, 5, 4, 3, 2, 1], {
+    baseSpread: 366,
+    topSpread: 96,
+    jitterX: 18,
+  }),
+  buildConstellation(19, [4, 5, 4, 4, 3, 3, 2, 1], {
+    baseSpread: 300,
+    topSpread: 44,
+  }),
+  buildConstellation(41, [6, 4, 5, 4, 4, 3, 2, 1], {
+    baseSpread: 384,
+    topSpread: 112,
+    jitterX: 20,
+  }),
 ];
 
-const EDGES: [string, string][] = [
-  ["a1", "b1"],
-  ["a2", "b1"],
-  ["a2", "b2"],
-  ["a3", "b2"],
-  ["a3", "b3"],
-  ["a4", "b3"],
-  ["a4", "b4"],
-  ["a5", "b4"],
-  ["a5", "b5"],
-  ["a6", "b5"],
-  ["b1", "c1"],
-  ["b1", "c2"],
-  ["b2", "c2"],
-  ["b2", "c3"],
-  ["b3", "c3"],
-  ["b3", "c4"],
-  ["b4", "c4"],
-  ["b4", "c5"],
-  ["b5", "c5"],
-  ["b5", "c6"],
-  ["c1", "d1"],
-  ["c2", "d1"],
-  ["c2", "d2"],
-  ["c3", "d2"],
-  ["c3", "d3"],
-  ["c4", "d3"],
-  ["c4", "d4"],
-  ["c5", "d4"],
-  ["c5", "d5"],
-  ["c6", "d5"],
-  ["d1", "e1"],
-  ["d2", "e1"],
-  ["d2", "e2"],
-  ["d3", "e2"],
-  ["d3", "e3"],
-  ["d4", "e3"],
-  ["d4", "e4"],
-  ["d5", "e4"],
-  ["e1", "f1"],
-  ["e2", "f1"],
-  ["e2", "f2"],
-  ["e3", "f2"],
-  ["e3", "f3"],
-  ["e4", "f3"],
-  ["f1", "g1"],
-  ["f2", "g1"],
-  ["f2", "g2"],
-  ["f3", "g2"],
-  ["g1", "h1"],
-  ["g2", "h1"],
-  ["g2", "ax"],
-  ["h1", "ax"],
-  // longer reaching links for organic depth
-  ["c3", "e2"],
-  ["d3", "f2"],
-  ["e3", "g2"],
-];
-
-const NODE_BY_ID = new Map(NODES.map((node) => [node.id, node]));
+const CYCLE_MS = 24_000;
+const FADE_MS = 700;
 
 export function AuthAside() {
   const { t } = useLocale();
+  const [active, setActive] = useState(0);
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const reduce = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    if (reduce) {
+      return;
+    }
+
+    let swap: ReturnType<typeof setTimeout> | undefined;
+    const cycle = setInterval(() => {
+      setVisible(false);
+      swap = setTimeout(() => {
+        setActive((index) => (index + 1) % VARIANTS.length);
+        setVisible(true);
+      }, FADE_MS);
+    }, CYCLE_MS);
+
+    return () => {
+      clearInterval(cycle);
+      if (swap) {
+        clearTimeout(swap);
+      }
+    };
+  }, []);
+
+  const constellation = VARIANTS[active];
 
   return (
     <aside className="za-aside relative flex h-full w-full flex-col overflow-hidden p-12 text-sidebar-foreground xl:p-16">
       <div className="relative z-10 shrink-0">
-        <div className="text-[11px] tracking-[0.35em] text-muted-foreground/70">
-          ZENO
-        </div>
-        <h2 className="mt-7 max-w-[19rem] text-pretty font-medium text-[26px] text-foreground/85 leading-[1.4] tracking-tight">
+        <h2 className="max-w-[19rem] text-pretty font-medium text-[26px] text-foreground/85 leading-[1.4] tracking-tight">
           {t("dialog.login.asideTagline")}
         </h2>
       </div>
@@ -128,41 +154,37 @@ export function AuthAside() {
       <div className="relative flex-1">
         <svg
           aria-hidden="true"
-          className="absolute inset-0 h-full w-full text-foreground [overflow:visible]"
+          className={cn(
+            "absolute inset-0 h-full w-full text-foreground transition-opacity duration-700 [overflow:visible]",
+            visible ? "opacity-100" : "opacity-0"
+          )}
           preserveAspectRatio="xMidYMax meet"
           viewBox="0 0 420 720"
         >
           <g className="za-edges">
-            {EDGES.map(([from, to], index) => {
-              const a = NODE_BY_ID.get(from);
-              const b = NODE_BY_ID.get(to);
-              if (!(a && b)) {
-                return null;
-              }
-              return (
-                <line
-                  className="za-edge"
-                  key={`${from}-${to}`}
-                  pathLength={1}
-                  stroke="currentColor"
-                  strokeOpacity={0.13}
-                  strokeWidth={1}
-                  style={{ animationDelay: `${0.1 + index * 0.028}s` }}
-                  x1={a.x}
-                  x2={b.x}
-                  y1={a.y}
-                  y2={b.y}
-                />
-              );
-            })}
+            {constellation.edges.map((edge, index) => (
+              <line
+                className="za-edge"
+                key={`${active}-e-${index}`}
+                pathLength={1}
+                stroke="currentColor"
+                strokeOpacity={0.13}
+                strokeWidth={1}
+                style={{ animationDelay: `${0.1 + index * 0.02}s` }}
+                x1={edge.x1}
+                x2={edge.x2}
+                y1={edge.y1}
+                y2={edge.y2}
+              />
+            ))}
           </g>
 
           <g className="za-nodes">
-            {NODES.map((node, index) => {
-              const delay = `${0.4 + index * 0.038}s`;
+            {constellation.nodes.map((node, index) => {
+              const delay = `${0.35 + index * 0.03}s`;
               if (node.kind === "apex") {
                 return (
-                  <g key={node.id}>
+                  <g key={`${active}-n-${index}`}>
                     <circle
                       className="za-halo"
                       cx={node.x}
@@ -193,7 +215,7 @@ export function AuthAside() {
                     cy={node.y}
                     fill="currentColor"
                     fillOpacity={0.9}
-                    key={node.id}
+                    key={`${active}-n-${index}`}
                     r={4.4}
                     style={{ animationDelay: delay }}
                   />
@@ -205,7 +227,7 @@ export function AuthAside() {
                   cx={node.x}
                   cy={node.y}
                   fill="var(--sidebar)"
-                  key={node.id}
+                  key={`${active}-n-${index}`}
                   r={3.6}
                   stroke="currentColor"
                   strokeOpacity={0.5}

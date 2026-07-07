@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { LoginForm } from "@/components/auth/login-form";
+import { ZenoLogo } from "@/components/zeno-logo";
 import { INVITE_COOKIE_NAME, isValidInviteCookie } from "@/lib/auth/invite";
 
 // Reads the invite cookie (runtime data) so a returning, already-verified visitor
@@ -21,7 +22,15 @@ async function InviteAwareLoginForm() {
 export default function Page() {
   return (
     <>
-      <h1 className="text-2xl font-semibold tracking-tight">Welcome to ZENO</h1>
+      <div className="mb-8 flex items-center justify-center gap-2.5">
+        <ZenoLogo className="size-8 text-foreground" />
+        <span
+          className="text-2xl text-foreground tracking-tight"
+          style={{ fontFamily: "var(--font-averia)" }}
+        >
+          ZENO
+        </span>
+      </div>
       <Suspense
         fallback={
           <div className="h-[260px] rounded-2xl border border-border/50 bg-muted/30" />

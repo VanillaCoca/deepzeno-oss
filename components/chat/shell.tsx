@@ -1,7 +1,7 @@
 "use client";
 
+import { PaperclipIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useLocale } from "@/components/i18n/locale-provider";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,7 +23,6 @@ import { MultimodalInput } from "./multimodal-input";
 export function ChatShell() {
   const { restoredSandboxContext, clearRestoredSandboxContext } =
     useWorkspace();
-  const { t } = useLocale();
   const {
     chatId,
     messages,
@@ -93,28 +92,24 @@ export function ChatShell() {
 
             <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
               {!isReadonly && (
-                <div className="flex w-full flex-col gap-3">
+                <div className="flex w-full flex-col gap-2">
                   {restoredSandboxContext && (
-                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="font-medium text-foreground">
-                            {t("chat.sandboxNextMessage", {
-                              title: restoredSandboxContext.decisionTitle,
-                            })}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {t("chat.sandboxNextMessageHint")}
-                          </p>
-                        </div>
-                        <button
-                          className="text-xs text-muted-foreground underline underline-offset-4"
-                          onClick={clearRestoredSandboxContext}
-                          type="button"
-                        >
-                          Clear
-                        </button>
-                      </div>
+                    <div className="flex max-w-full items-center gap-2 self-start rounded-full border border-border/60 bg-muted/40 py-1 pr-1 pl-3 text-[13px]">
+                      <PaperclipIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                      <span className="shrink-0 text-muted-foreground">
+                        {restoredSandboxContext.kind}
+                      </span>
+                      <span className="min-w-0 truncate text-foreground">
+                        {restoredSandboxContext.decisionTitle}
+                      </span>
+                      <button
+                        aria-label="Clear"
+                        className="grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        onClick={clearRestoredSandboxContext}
+                        type="button"
+                      >
+                        <XIcon className="size-3.5" />
+                      </button>
                     </div>
                   )}
 
