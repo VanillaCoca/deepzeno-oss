@@ -26,6 +26,7 @@ import {
   updateDecisionStatus,
   updateTopicStatusById,
 } from "./queries";
+import { ensureExampleProjectsSeeded } from "./example-projects";
 import type {
   TopicRelationType,
   TopicStatus,
@@ -119,12 +120,21 @@ export async function bootstrapWorkspace({
   let projects = await listProjectsByUserId(userId);
 
   if (projects.length === 0) {
-    await provisionProjectBundle({
-      userId,
-      userEmail,
-      name: DEFAULT_PROJECT_NAME,
-    });
+    // A user who deep-links straight into a workspace before ever hitting the
+    // Library home still gets the official example projects seeded here.
+    await ensureExampleProjectsSeeded({ userId, userEmail });
     projects = await listProjectsByUserId(userId);
+
+    // Safety net: if seeding failed (it never throws), fall back to a blank
+    // project so the workspace still has something to open.
+    if (projects.length === 0) {
+      await provisionProjectBundle({
+        userId,
+        userEmail,
+        name: DEFAULT_PROJECT_NAME,
+      });
+      projects = await listProjectsByUserId(userId);
+    }
   }
 
   const selectedConversation = selection?.conversationId

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ZenoLogo } from "@/components/zeno-logo";
 import { getHomeTranslator } from "@/lib/i18n/server";
 import { cn } from "@/lib/utils";
+import { ensureExampleProjectsSeeded } from "@/lib/workspace/example-projects";
 import { listProjectSummariesByUserId } from "@/lib/workspace/queries";
 import type { WorkspaceProjectSummary } from "@/lib/workspace/types";
 
@@ -162,6 +163,13 @@ function EmptyState({
 
 async function HomepageContent() {
   const session = await requireAuth();
+  // First-login onboarding: seed the two official example projects so the
+  // Library is never empty. Idempotent (only when the user has 0 projects) and
+  // non-throwing, so it never blocks the page from rendering.
+  await ensureExampleProjectsSeeded({
+    userId: session.user.id,
+    userEmail: session.user.email,
+  });
   const projects = await listProjectSummariesByUserId(session.user.id);
   const t = await getHomeTranslator();
 
