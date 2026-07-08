@@ -20,7 +20,8 @@
       "!components/ui",
       "!docs/ZenoTruthGraph.reference.jsx",
       "!lib/utils.ts",
-      "!hooks/use-mobile.ts"
+      "!hooks/use-mobile.ts",
+      "!supabase/templates"
     ]
   },
   "linter": {
