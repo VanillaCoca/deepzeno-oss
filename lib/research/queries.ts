@@ -36,6 +36,7 @@ export type EvidenceItem = {
   quote: string;
   claim: string;
   stance: "supports" | "contradicts" | "neutral";
+  sourceScore: number | null;
   retrievedAt: string;
   createdAt: string;
 };
@@ -149,6 +150,7 @@ function mapEvidence(row: Record<string, unknown>): EvidenceItem {
     quote: String(row.quote),
     claim: String(row.claim),
     stance: String(row.stance) as EvidenceItem["stance"],
+    sourceScore: toNullableNumber(row.source_score),
     retrievedAt: toIsoString(row.retrieved_at),
     createdAt: toIsoString(row.created_at),
   };
@@ -261,15 +263,45 @@ export async function insertEvidence(
     quote: r.quote,
     claim: r.claim,
     stance: r.stance,
+    source_score: r.sourceScore,
     retrieved_at: toIsoString(r.retrievedAt),
   }));
 
-  const inserted = await ensureResult<Record<string, unknown>[]>(
-    db.from("evidence").insert(snakeRows).select("*"),
-    "Failed to insert evidence rows"
-  );
+  // Deploy-order tolerance: if the source_score column has not been migrated
+  // yet (PostgREST PGRST204 "column not found"), land the evidence without
+  // scores rather than failing the whole run.
+  const first = await db.from("evidence").insert(snakeRows).select("*");
+  if (
+    first.error?.code === "PGRST204" &&
+    first.error.message?.includes("source_score")
+  ) {
+    const legacyRows = snakeRows.map(
+      ({ source_score: _sourceScore, ...rest }) => rest
+    );
+    const inserted = await ensureResult<Record<string, unknown>[]>(
+      db.from("evidence").insert(legacyRows).select("*"),
+      "Failed to insert evidence rows"
+    );
+    return inserted.map(mapEvidence);
+  }
 
-  return inserted.map(mapEvidence);
+  if (first.error) {
+    if (isMissingTableError(first.error)) {
+      throw new IRNotReadyError("Research schema has not been migrated yet.");
+    }
+    console.error("Failed to insert evidence rows", {
+      code: first.error.code ?? null,
+      message: first.error.message,
+      details: first.error.details ?? null,
+      hint: first.error.hint ?? null,
+    });
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to insert evidence rows"
+    );
+  }
+
+  return (first.data as Record<string, unknown>[]).map(mapEvidence);
 }
 
 export async function listResearchRunsForNode({

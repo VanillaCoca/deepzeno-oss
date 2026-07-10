@@ -529,6 +529,9 @@ export const evidence = pgTable("evidence", {
   quote: text("quote").notNull(),
   claim: text("claim").notNull(),
   stance: text("stance").notNull(),
+  // Source-reliability prior in [0, 1] (lib/research/source-score.ts).
+  // Nullable: rows created before scoring landed have no score.
+  sourceScore: real("source_score"),
   retrievedAt: timestamp("retrieved_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
