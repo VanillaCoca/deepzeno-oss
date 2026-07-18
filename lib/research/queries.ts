@@ -10,6 +10,9 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export type ResearchRunStatus = "running" | "done" | "partial" | "failed";
 
+// 'research' = user-triggered L2 run; 'patrol' = Watchtower L3 sentinel.
+export type ResearchRunType = "research" | "patrol";
+
 export type ResearchRun = {
   id: string;
   projectId: string;
@@ -22,6 +25,8 @@ export type ResearchRun = {
   budget: unknown;
   costEstimate: number | null;
   modelsUsed: unknown;
+  runType: ResearchRunType;
+  watchId: string | null;
   createdAt: string;
   finishedAt: string | null;
 };
@@ -134,6 +139,9 @@ function mapResearchRun(row: Record<string, unknown>): ResearchRun {
     budget: row.budget,
     costEstimate: toNullableNumber(row.cost_estimate),
     modelsUsed: row.models_used,
+    // Rows predating the watchtower migration have no run_type column.
+    runType: row.run_type === "patrol" ? "patrol" : "research",
+    watchId: toNullableString(row.watch_id),
     createdAt: toIsoString(row.created_at),
     finishedAt: row.finished_at == null ? null : toIsoString(row.finished_at),
   };
@@ -165,11 +173,15 @@ export async function createResearchRun({
   topicId,
   originNodeId,
   budget,
+  runType,
+  watchId,
 }: {
   projectId: string;
   topicId: string | null;
   originNodeId: string;
   budget: unknown;
+  runType?: ResearchRunType;
+  watchId?: string | null;
 }): Promise<ResearchRun> {
   const db = getClient();
 
@@ -181,6 +193,10 @@ export async function createResearchRun({
         topic_id: topicId,
         origin_node_id: originNodeId,
         budget,
+        // Omit patrol columns entirely on default runs so inserts keep
+        // working against a pre-watchtower-migration database.
+        ...(runType && runType !== "research" ? { run_type: runType } : {}),
+        ...(watchId ? { watch_id: watchId } : {}),
       })
       .select("*")
       .single(),

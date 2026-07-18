@@ -15,18 +15,19 @@ export type ImportedIRCreationInput = {
 
 export function validateStandardIRCreation(input: StandardIRCreationInput) {
   // Ideas come only from AI funnels that triage by confidence: the chat
-  // sweep, the project-kickoff synthesis, and the research pipeline.
-  // Everything else proposes pending.
+  // sweep, the project-kickoff synthesis, and the research/watchtower
+  // pipelines. Everything else proposes pending.
   if (
     input.initialStatus === "idea" &&
     input.sourceLayer !== "sweep" &&
     input.sourceLayer !== "kickoff" &&
-    input.sourceLayer !== "research"
+    input.sourceLayer !== "research" &&
+    input.sourceLayer !== "watchtower"
   ) {
     return {
       ok: false as const,
       message:
-        "Only sweep, kickoff, or research extraction can create idea nodes",
+        "Only sweep, kickoff, research, or watchtower extraction can create idea nodes",
     };
   }
 

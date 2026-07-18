@@ -129,6 +129,9 @@ export const project = pgTable("projects", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   userId: uuid("user_id").notNull(),
   name: text("name").notNull(),
+  // Research-agent settings (patrol switch, default cadence, research model).
+  // Nullable jsonb — parsed/defaulted by parseAgentSettings in code.
+  agentSettings: jsonb("agent_settings"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -491,6 +494,38 @@ export const chatSessionState = pgTable("chat_session_state", {
 
 export type ChatSessionState = InferSelectModel<typeof chatSessionState>;
 
+// Watchtower watches (L3): one per node, patrolled on a cadence. Pausing is
+// the off switch; suggested watches come from watch-suggest.ts.
+export const irWatch = pgTable("ir_watches", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => project.id, { onDelete: "cascade" }),
+  nodeId: text("node_id")
+    .notNull()
+    .references(() => irNode.id, { onDelete: "cascade" })
+    .unique(),
+  origin: text("origin").notNull(),
+  reason: text("reason").notNull(),
+  cadence: text("cadence").notNull().default("daily"),
+  status: text("status").notNull().default("active"),
+  // Per-watch model override; null = the project's research model setting.
+  modelId: text("model_id"),
+  lastPatrolAt: timestamp("last_patrol_at", { withTimezone: true }),
+  lastSignalAt: timestamp("last_signal_at", { withTimezone: true }),
+  lastAlertAt: timestamp("last_alert_at", { withTimezone: true }),
+  nextDueAt: timestamp("next_due_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+export type IRWatchRow = InferSelectModel<typeof irWatch>;
+
 export const researchRun = pgTable("research_run", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   projectId: uuid("project_id")
@@ -509,6 +544,11 @@ export const researchRun = pgTable("research_run", {
   budget: jsonb("budget"),
   costEstimate: real("cost_estimate"),
   modelsUsed: jsonb("models_used"),
+  // 'research' (user-triggered L2) or 'patrol' (Watchtower L3 sentinel).
+  runType: text("run_type").notNull().default("research"),
+  watchId: uuid("watch_id").references(() => irWatch.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

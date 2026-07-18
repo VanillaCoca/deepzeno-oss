@@ -35,6 +35,7 @@ import {
 } from "./search";
 import { rankBySourceScore, scoreSource } from "./source-score";
 import { verifyQuote } from "./text";
+import { getProjectAgentSettings } from "./watch-queries";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -550,8 +551,6 @@ export async function runResearchPipeline({
   // Undefined → the product default chain (DeepSeek when configured).
   preferredModelId?: string | null;
 }): Promise<PipelineResult> {
-  const preferredModelId = normalizeResearchModelId(preferredModelIdInput);
-
   // ── 1. Load + gate ──────────────────────────────────────────────────────────
   const node = await getIRNodeForUser({ id: originNodeId, userId });
 
@@ -572,6 +571,17 @@ export async function runResearchPipeline({
   if (!resolveSearchProvider()) {
     throw new ResearchToolUnavailableError(SEARCH_PROVIDER_MISSING_MESSAGE);
   }
+
+  // Model preference: explicit override (watch / caller) → project agent
+  // setting → default chain. Settings lookup is best-effort so a
+  // pre-migration database still runs research on the defaults.
+  const storedModelId =
+    preferredModelIdInput === undefined
+      ? await getProjectAgentSettings(node.projectId)
+          .then((settings) => settings.researchModelId)
+          .catch(() => null)
+      : preferredModelIdInput;
+  const preferredModelId = normalizeResearchModelId(storedModelId);
 
   const budget = resolveResearchBudget();
   const run = await createResearchRun({
