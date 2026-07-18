@@ -126,6 +126,150 @@ async function seedWelcomeMessage({
   ]);
 }
 
+// Inserts research runs + evidence, an active watch, and the watchtower
+// alert candidate for the nodes an example declares research for. Each
+// artifact class is individually tolerant: on a pre-watchtower-migration
+// database the runs/evidence still land, the watch and alert are skipped.
+async function seedResearchArtifacts({
+  projectId,
+  research,
+  idByKey,
+  topicIdByNodeKey,
+  nextId,
+  nowIso,
+}: {
+  projectId: string;
+  research: NonNullable<ExampleProject["research"]>;
+  idByKey: Map<string, string>;
+  topicIdByNodeKey: Map<string, string>;
+  nextId: NextIdFn;
+  nowIso: string;
+}) {
+  const client = getClient();
+
+  for (const entry of research) {
+    const nodeId = idByKey.get(entry.nodeKey);
+    const topicId = topicIdByNodeKey.get(entry.nodeKey) ?? null;
+    if (!nodeId) {
+      continue;
+    }
+
+    // 1. Runs + evidence (tables exist since the L2 migration).
+    for (const run of entry.runs) {
+      const { data: runRow, error: runError } = await client
+        .from("research_run")
+        .insert({
+          project_id: projectId,
+          topic_id: topicId,
+          origin_node_id: nodeId,
+          plan: run.plan,
+          brief: run.brief,
+          status: "done",
+          created_at: nowIso,
+          finished_at: nowIso,
+          // run_type only exists post-watchtower-migration; 'research' is
+          // the column default, so omitting keeps both schemas happy.
+        })
+        .select("id")
+        .single();
+      if (runError) {
+        throw runError;
+      }
+
+      const evidenceRows = run.evidence.map((item) => ({
+        project_id: projectId,
+        run_id: runRow.id,
+        node_id: nodeId,
+        url: item.url,
+        title: item.title,
+        quote: item.quote,
+        claim: item.claim,
+        stance: item.stance,
+        source_score: item.url.includes(".canada.ca") ? 0.95 : 0.6,
+        retrieved_at: nowIso,
+        created_at: nowIso,
+      }));
+      if (evidenceRows.length > 0) {
+        const { error: evidenceError } = await client
+          .from("evidence")
+          .insert(evidenceRows);
+        if (evidenceError) {
+          throw evidenceError;
+        }
+      }
+    }
+
+    // 2. Active watch (needs the watchtower migration; skip quietly without).
+    if (entry.watch) {
+      const { error: watchError } = await client.from("ir_watches").insert({
+        project_id: projectId,
+        node_id: nodeId,
+        origin: "zeno_suggested",
+        reason: entry.watch.reason,
+        cadence: entry.watch.cadence,
+        status: "active",
+        last_patrol_at: nowIso,
+        ...(entry.alert
+          ? { last_signal_at: nowIso, last_alert_at: nowIso }
+          : {}),
+        next_due_at: new Date(
+          new Date(nowIso).getTime() + 24 * 3600 * 1000
+        ).toISOString(),
+      });
+      if (watchError) {
+        console.warn(
+          "[example-seed] watch skipped (watchtower migration pending?)",
+          watchError.message
+        );
+      }
+    }
+
+    // 3. Alert candidate ('watchtower' source layer needs the migration's
+    // widened check constraint; separate insert so failure stays local).
+    if (entry.alert) {
+      const alertId = await nextId("open_question");
+      const { error: alertError } = await client.from("ir_nodes").insert({
+        id: alertId,
+        project_id: projectId,
+        topic_id: topicId,
+        kind: "open_question",
+        subtype: null,
+        status: "pending",
+        title: entry.alert.title,
+        content: entry.alert.rationale,
+        rationale: entry.alert.rationale,
+        sensitivity: "normal",
+        source_layer: "watchtower",
+        created_by: "ai",
+        created_at: nowIso,
+        promoted_to_pending_at: nowIso,
+      });
+      if (alertError) {
+        console.warn(
+          "[example-seed] alert candidate skipped (watchtower migration pending?)",
+          alertError.message
+        );
+      } else {
+        const { error: alertEdgeError } = await client.from("ir_edges").insert({
+          project_id: projectId,
+          from_node: alertId,
+          to_node: nodeId,
+          relation: "contradicts",
+          label: entry.alert.edgeLabel,
+          status: "active",
+          is_anchor_hint: false,
+        });
+        if (alertEdgeError) {
+          console.warn(
+            "[example-seed] alert edge skipped",
+            alertEdgeError.message
+          );
+        }
+      }
+    }
+  }
+}
+
 async function seedOneExampleProject({
   userId,
   userEmail,
@@ -177,12 +321,14 @@ async function seedOneExampleProject({
 
   // Assign ids to every node, then bulk-insert nodes, then edges.
   const idByKey = new Map<string, string>();
+  const topicIdByNodeKey = new Map<string, string>();
   const nodeRows: Record<string, unknown>[] = [];
 
   for (const topic of createdTopics) {
     for (const node of topic.nodes) {
       const id = await nextId(node.kind, node.subtype);
       idByKey.set(node.key, id);
+      topicIdByNodeKey.set(node.key, topic.topicId);
       nodeRows.push({
         id,
         project_id: project.id,
@@ -194,7 +340,8 @@ async function seedOneExampleProject({
         content: node.rationale,
         rationale: node.rationale,
         sensitivity: "normal",
-        source_layer: node.status === "active" ? "manual" : "sweep",
+        source_layer:
+          node.sourceLayer ?? (node.status === "active" ? "manual" : "sweep"),
         created_by: "ai",
         created_at: nowIso,
         ...(node.status === "active" ? { confirmed_at: nowIso } : {}),
@@ -225,6 +372,7 @@ async function seedOneExampleProject({
         from_node: fromId,
         to_node: toId,
         relation: edge.relation,
+        label: edge.label ?? null,
         status: "active",
         is_anchor_hint: false,
       });
@@ -235,6 +383,28 @@ async function seedOneExampleProject({
     const { error } = await client.from("ir_edges").insert(edgeRows);
     if (error) {
       throw error;
+    }
+  }
+
+  // Pre-baked research/watch/alert artifacts — the "agent already did its
+  // homework" moment on first open. Strictly best-effort: a database that
+  // hasn't run the watchtower migration yet (ir_watches table, 'watchtower'
+  // source layer) still seeds the full graph above.
+  if (spec.research && spec.research.length > 0) {
+    try {
+      await seedResearchArtifacts({
+        projectId: project.id,
+        research: spec.research,
+        idByKey,
+        topicIdByNodeKey,
+        nextId,
+        nowIso,
+      });
+    } catch (error) {
+      console.error(
+        `[example-seed] research artifacts failed for "${spec.slug}" (graph seeded)`,
+        error
+      );
     }
   }
 

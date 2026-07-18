@@ -1,4 +1,9 @@
-import type { IRKind, IRPlanSubtype, IRRelation } from "@/lib/ir/types";
+import type {
+  IRKind,
+  IRPlanSubtype,
+  IRRelation,
+  IRSourceLayer,
+} from "@/lib/ir/types";
 
 // Content for the two official example projects seeded into every new user's
 // Library (see docs/superpowers/specs/2026-07-07-example-projects-seeding-design.md).
@@ -21,12 +26,18 @@ export type ExampleNode = {
   status: ExampleNodeStatus;
   title: string;
   rationale: string;
+  // Override the default source layer (active→manual, pending→sweep) —
+  // e.g. "research" for candidates the research agent proposed.
+  sourceLayer?: IRSourceLayer;
 };
 
 export type ExampleEdge = {
   from: string;
   relation: IRRelation;
   to: string;
+  // AI-written free-form description of the link (ir_edges.label) — shown on
+  // the quiet dependency edges and the reasoning chain.
+  label?: string;
 };
 
 export type ExampleTopic = {
@@ -37,6 +48,44 @@ export type ExampleTopic = {
   edges: ExampleEdge[];
 };
 
+// Pre-baked research/watchtower artifacts so a new user's first open shows
+// the agent's proactivity (evidence + an active watch + a patrol alert)
+// without spending tokens at signup. Quotes/claims are demo content; the
+// welcome message discloses that.
+export type ExampleEvidence = {
+  url: string;
+  title: string;
+  quote: string;
+  claim: string;
+  stance: "supports" | "contradicts" | "neutral";
+};
+
+export type ExampleResearchRun = {
+  type: "research" | "patrol";
+  plan: Array<{ query: string; goal: string }>;
+  brief: string;
+  evidence: ExampleEvidence[];
+};
+
+export type ExampleResearch = {
+  // Key of the node the runs/watch/alert anchor to.
+  nodeKey: string;
+  runs: ExampleResearchRun[];
+  watch?: {
+    cadence: "daily" | "every_3_days" | "weekly";
+    reason: string;
+  };
+  // Watchtower alert candidate (pending open_question, sourceLayer
+  // "watchtower", contradicts edge to the watched node). Seeded separately
+  // from the main node batch so a pre-watchtower-migration database still
+  // seeds the rest of the project.
+  alert?: {
+    title: string;
+    rationale: string;
+    edgeLabel: string;
+  };
+};
+
 export type ExampleProject = {
   // Stable slug for logging/telemetry.
   slug: string;
@@ -45,6 +94,7 @@ export type ExampleProject = {
   welcomeTopicKey: string;
   welcome: string;
   topics: ExampleTopic[];
+  research?: ExampleResearch[];
 };
 
 const EN_WELCOME = [
@@ -550,7 +600,354 @@ const CHINESE_EXAMPLE: ExampleProject = {
   ],
 };
 
+const IMMIGRATION_WELCOME = [
+  "👋 这是一个 **Deepzeno 官方示例** —— 一个家庭如何把「全家技术移民加拿大」这件大事,拆成一张可以持续维护的真相图。",
+  "",
+  "这个示例专门展示 Deepzeno 的两件核心能力:",
+  "",
+  "**1. 前置假设看得见。** 打开左边的**路径决策**主题:「走联邦 EE 通道」这个决定,用箭头连着它脚下的三条前提——政策假设、语言假设、预算约束(入口处的 ①②③ 表示它们缺一不可)。不用点开任何节点,谁建立在谁之上一目了然;悬停任意一条线,能看到 AI 写的依赖说明。",
+  "",
+  "**2. Agent 主动做调研。** 注意「EE 抽分线不大幅上涨」这条假设旁边的📡雷达标:Zeno 已经把它列入**自动巡检**——点开它,能看到 agent 之前抓取的政策证据(Research 区),以及巡检设置(Monitoring 区)。巡检发现了相反信号,于是在待决区主动放了一张**告警候选**:「该假设可能已被推翻?」——确认或驳回,都由你判断,Zeno 永远不替你改真相。",
+  "",
+  "**30 秒上手:**",
+  "1. 点**路径决策**,看依赖箭头与 ①②③ 汇聚;",
+  "2. 点那张告警候选卡,看 agent 附上的反方证据;",
+  "3. 图右上角 **调研 Agent** 按钮里,可以调巡检频率、换调研模型(默认 DeepSeek)、或点「立即巡检」。",
+  "",
+  "_注:此示例中的调研证据与巡检记录为演示数据(链接指向真实官网,引文为演示文字)。_",
+  "—— Deepzeno 团队",
+].join("\n");
+
+const IMMIGRATION_EXAMPLE: ExampleProject = {
+  slug: "zh-immigration",
+  name: "✦ Deepzeno 示例 · 全家移民规划",
+  welcomeTopicKey: "start",
+  welcome: IMMIGRATION_WELCOME,
+  topics: [
+    {
+      key: "start",
+      label: "从这里开始",
+      isGeneral: true,
+      nodes: [],
+      edges: [],
+    },
+    {
+      key: "route",
+      label: "路径决策",
+      nodes: [
+        {
+          key: "goal",
+          kind: "goal",
+          status: "active",
+          title: "18 个月内完成全家加拿大技术移民登陆",
+          rationale:
+            "把「要不要移民」升级成「怎么在窗口期内落地」:时间盒逼着每个选择按可行性排序,而不是无限比较。",
+        },
+        {
+          key: "budget",
+          kind: "constraint",
+          status: "active",
+          title: "总预算上限 60 万人民币(含安家储备金)",
+          rationale:
+            "不动用父母养老金是硬边界。任何单路径花费超过 35 万的方案直接出局。",
+        },
+        {
+          key: "school-window",
+          kind: "constraint",
+          status: "active",
+          title: "大女儿 2028 年 9 月前必须入学,窗口不可后移",
+          rationale: "超过这个时间点转学衔接成本陡增,全家时间表都从它倒推。",
+        },
+        {
+          key: "policy-hyp",
+          kind: "hypothesis",
+          status: "active",
+          title: "假设:EE 抽分线未来 12 个月不会大幅上涨",
+          rationale:
+            "整条联邦 EE 路径建立在「当前分数够得着」之上。政策一收紧,主通道立即需要重审——这是全项目最脆弱的前提。",
+        },
+        {
+          key: "ielts-hyp",
+          kind: "hypothesis",
+          status: "active",
+          title: "假设:雅思 6 个月内可达 4 个 7(CLB 9)",
+          rationale:
+            "语言分是 CRS 打分的最大可控变量。达不到 CLB 9,分数模型整体塌方。",
+        },
+        {
+          key: "route-decision",
+          kind: "plan",
+          subtype: "decision",
+          status: "active",
+          title: "决定:主通道走联邦 EE,雇主担保仅作备选",
+          rationale:
+            "EE 流程透明、周期可控、不依赖单一雇主。它同时押在政策假设与语言假设上——任一条动摇,这个决定要回沙盒重审。",
+        },
+        {
+          key: "eca-decision",
+          kind: "plan",
+          subtype: "decision",
+          status: "active",
+          title: "决定:今年 Q4 前完成学历认证(ECA)与雅思首考",
+          rationale:
+            "定了通道才排得出关键路径:ECA 是入池前置,首考留出二刷余量。",
+        },
+        {
+          key: "quebec-rejected",
+          kind: "rejection",
+          status: "active",
+          title: "排除:魁北克技术移民路径",
+          rationale:
+            "法语门槛对全家过高,且该省政策近年波动频繁,与「窗口不可后移」约束冲突。",
+        },
+        {
+          key: "backup-q",
+          kind: "open_question",
+          status: "active",
+          title: "是否同步申请省提名(OINP/BCPNP)作为备份?",
+          rationale:
+            "省提名能对冲联邦抽分风险,但材料成本高。要不要付这份保险费,取决于政策假设有多稳。",
+        },
+        {
+          key: "oinp-candidate",
+          kind: "plan",
+          subtype: "decision",
+          status: "pending",
+          sourceLayer: "research",
+          title: "候选:同步准备安省 OINP 人力资本类材料",
+          rationale:
+            "调研显示 OINP 人力资本类与 EE 材料重合度约 80%,边际成本低——作为对冲值得做。来自调研管线的建议,待你确认。",
+        },
+      ],
+      edges: [
+        {
+          from: "route-decision",
+          relation: "depends_on",
+          to: "policy-hyp",
+          label: "抽分稳定才成立",
+        },
+        {
+          from: "route-decision",
+          relation: "depends_on",
+          to: "ielts-hyp",
+          label: "语言分是入池门槛",
+        },
+        {
+          from: "route-decision",
+          relation: "depends_on",
+          to: "budget",
+          label: "预算内可行",
+        },
+        {
+          from: "eca-decision",
+          relation: "depends_on",
+          to: "route-decision",
+          label: "定通道后才排期",
+        },
+        {
+          from: "eca-decision",
+          relation: "depends_on",
+          to: "school-window",
+          label: "从入学窗口倒推",
+        },
+        {
+          from: "backup-q",
+          relation: "depends_on",
+          to: "policy-hyp",
+          label: "政策风险引出备份",
+        },
+        {
+          from: "oinp-candidate",
+          relation: "resolves",
+          to: "backup-q",
+          label: "对冲联邦抽分风险",
+        },
+      ],
+    },
+    {
+      key: "prep",
+      label: "语言与资金准备",
+      nodes: [
+        {
+          key: "study-time",
+          kind: "constraint",
+          status: "active",
+          title: "两人每周可投入学习时间合计 ≤10 小时",
+          rationale: "双职工带娃的真实上限。任何备考计划超出它就是自欺。",
+        },
+        {
+          key: "fx-hyp",
+          kind: "hypothesis",
+          status: "active",
+          title: "假设:人民币兑加元汇率 12 个月内波动小于 8%",
+          rationale: "换汇节奏与安家资金规划都押在汇率大体平稳上。",
+        },
+        {
+          key: "ielts-plan",
+          kind: "plan",
+          subtype: "decision",
+          status: "active",
+          title: "决定:报名周末雅思强化班,10 月完成首考",
+          rationale:
+            "在每周 10 小时约束下,自学效率不够,外部结构化训练是必需品。",
+        },
+        {
+          key: "fx-plan",
+          kind: "plan",
+          subtype: "decision",
+          status: "active",
+          title: "决定:资金分三批换汇,首批本月完成",
+          rationale: "分批摊平汇率波动;若汇率假设被推翻,后两批策略要重定。",
+        },
+        {
+          key: "account-q",
+          kind: "open_question",
+          status: "active",
+          title: "是否需要在国内提前开立加元账户?",
+          rationale: "涉及换汇通道与后续学费支付方式,尚未比较清楚成本差异。",
+        },
+      ],
+      edges: [
+        {
+          from: "ielts-plan",
+          relation: "depends_on",
+          to: "study-time",
+          label: "在时间上限内可行",
+        },
+        {
+          from: "fx-plan",
+          relation: "depends_on",
+          to: "fx-hyp",
+          label: "汇率平稳才分批",
+        },
+        {
+          from: "account-q",
+          relation: "depends_on",
+          to: "fx-plan",
+          label: "换汇方式决定账户需求",
+        },
+      ],
+    },
+    {
+      key: "settle",
+      label: "安家与子女教育",
+      nodes: [
+        {
+          key: "settle-principle",
+          kind: "principle",
+          status: "active",
+          title: "原则:落地城市以学区质量与华人社区支持优先",
+          rationale: "第一年适应成本主要落在孩子身上,城市选择为她服务。",
+        },
+        {
+          key: "city-decision",
+          kind: "plan",
+          subtype: "decision",
+          status: "active",
+          title: "决定:首选大多伦多区,备选卡尔加里",
+          rationale: "教育资源与就业市场最厚;卡尔加里以生活成本低作为保底。",
+        },
+        {
+          key: "vancouver-rejected",
+          kind: "rejection",
+          status: "active",
+          title: "排除:温哥华",
+          rationale: "房价直接击穿预算约束,不再投入比较精力。",
+        },
+        {
+          key: "school-q",
+          kind: "open_question",
+          status: "active",
+          title: "小学成绩单与出生证明公证何时启动?",
+          rationale:
+            "公证与认证周期约 6-8 周,需要从入学窗口倒排,但尚未确认清单。",
+        },
+      ],
+      edges: [
+        {
+          from: "city-decision",
+          relation: "depends_on",
+          to: "settle-principle",
+          label: "按此原则筛选城市",
+        },
+        {
+          from: "school-q",
+          relation: "depends_on",
+          to: "city-decision",
+          label: "定城市后才定学校",
+        },
+      ],
+    },
+  ],
+  research: [
+    {
+      nodeKey: "policy-hyp",
+      runs: [
+        {
+          type: "research",
+          plan: [
+            {
+              query: "Express Entry CRS cutoff trend 2026",
+              goal: "确认近 6 个月抽分走势",
+            },
+            {
+              query: "IRCC immigration levels plan federal skilled worker",
+              goal: "确认联邦技术移民配额是否调整",
+            },
+          ],
+          brief: [
+            "## 调研简报:EE 抽分线是否会大幅上涨(演示数据)",
+            "",
+            "- 官方 Express Entry 页面确认抽签机制与类别未变 [0]。",
+            "- 但最近两轮全类别抽分连续上行,累计上涨超过 60 分 [1]。",
+            "- 行业分析认为配额向省提名与特定职业倾斜,联邦通道竞争趋紧 [2]。",
+            "",
+            "**结论:** 该假设短期仍勉强成立,但反向信号明显,建议保持每日巡检并准备省提名对冲(见候选)。",
+          ].join("\n"),
+          evidence: [
+            {
+              url: "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry.html",
+              title: "Express Entry — Canada.ca",
+              quote:
+                "(演示引文)Express Entry is an online system that we use to manage immigration applications from skilled workers.",
+              claim: "EE 抽签机制与申请框架本身未发生结构性变化。",
+              stance: "supports",
+            },
+            {
+              url: "https://www.canada.ca/en/immigration-refugees-citizenship/corporate/mandate/policies-operational-instructions-agreements/ministerial-instructions/express-entry-rounds.html",
+              title: "Express Entry rounds of invitations — Canada.ca",
+              quote:
+                "(演示引文)Recent all-program rounds show minimum CRS scores rising in consecutive draws.",
+              claim: "最近两轮全类别抽分连续上涨,与「不大幅上涨」的假设相悖。",
+              stance: "contradicts",
+            },
+            {
+              url: "https://www.cicnews.com/",
+              title: "CIC News — Express Entry 分析(演示)",
+              quote:
+                "(演示引文)Analysts expect federal high-skilled admissions to tighten as allocations shift toward provincial programs.",
+              claim: "分析认为配额向省提名倾斜,联邦通道竞争将加剧。",
+              stance: "contradicts",
+            },
+          ],
+        },
+      ],
+      watch: {
+        cadence: "daily",
+        reason: "可证伪假设 · 2 个判断建立在它之上 · 已有网络证据需要保鲜",
+      },
+      alert: {
+        title: "「EE 抽分线不大幅上涨」可能已被推翻——近两轮连续上涨?",
+        rationale:
+          "Watchtower 巡检发现:新抓取的抽分数据与该前提相矛盾(演示数据)。若确认,「主通道走联邦 EE」与备份问题都需要回沙盒重审。",
+        edgeLabel: "巡检发现新信号",
+      },
+    },
+  ],
+};
+
 export const EXAMPLE_PROJECTS: ExampleProject[] = [
+  IMMIGRATION_EXAMPLE,
   ENGLISH_EXAMPLE,
   CHINESE_EXAMPLE,
 ];
