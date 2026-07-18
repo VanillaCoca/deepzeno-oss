@@ -32,6 +32,36 @@ const FLOW_RELATIONS = new Set<IRRelation>([
   "resolves",
 ]);
 
+// Quiet-edge subset (rules amendment №2): only prerequisite/sequence
+// relations draw as always-on lines in the overview. resolves/refines keep
+// their IBIS nesting; supersedes/contradicts never draw.
+export const QUIET_EDGE_RELATIONS = new Set<IRRelation>([
+  "depends_on",
+  "implies",
+]);
+
+// i18n key for the built-in phrase of a structural relation — the fallback
+// label when an edge has no free-form AI-written `label` yet. Shared by the
+// chain card and the overview quiet edges.
+export function relationKey(relation: string): string | null {
+  switch (relation) {
+    case "depends_on":
+      return "graph.relDependsOn";
+    case "resolves":
+      return "graph.relResolves";
+    case "refines":
+      return "graph.relRefines";
+    case "implies":
+      return "graph.relImplies";
+    case "supersedes":
+      return "graph.relSupersedes";
+    case "contradicts":
+      return "graph.relContradicts";
+    default:
+      return null;
+  }
+}
+
 const TOPICLESS_ID = "__unassigned__";
 
 function parentChildOf(edge: IREdge) {

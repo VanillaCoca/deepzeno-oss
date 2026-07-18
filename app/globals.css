@@ -683,3 +683,31 @@ textarea:focus-visible {
     }
   }
 }
+
+/* Truth-graph quiet dependency edges (rules amendment №2): a one-shot
+   draw-in for solid lines (pathLength=1 normalized) and a fade-in for dashed
+   hypothesis-premise lines, both honoring reduced-motion. */
+.z-lane-edge-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .z-lane-edge-draw {
+    stroke-dashoffset: 1;
+    animation: za-draw 0.5s ease forwards;
+  }
+
+  .z-lane-edge-fade {
+    animation: z-lane-edge-fade-in 0.4s ease backwards;
+  }
+
+  @keyframes z-lane-edge-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}

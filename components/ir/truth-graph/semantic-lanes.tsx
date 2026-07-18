@@ -7,6 +7,10 @@
 // folded lines for premises and excluded items. Color is demoted to a
 // reinforcement signal; every node self-labels with an icon + type chip, so no
 // legend is needed (amendment §3, implementing v1 §4.1/§4.7 redundancy).
+//
+// Amendment №2 adds the quiet dependency edges: an SVG overlay draws
+// depends_on / implies arrows between visible rows of the same topic, so
+// prerequisite assumptions and event ordering read without any selection.
 
 import {
   AnchorIcon,
@@ -20,11 +24,12 @@ import {
   XIcon,
 } from "lucide-react";
 import type { ComponentType, MouseEvent, ReactNode, SVGProps } from "react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale } from "@/components/i18n/locale-provider";
 import type { IRNode } from "@/lib/ir/types";
 import { cn } from "@/lib/utils";
-import type { TruthGraphModel } from "./data";
+import { QUIET_EDGE_RELATIONS, type TruthGraphModel } from "./data";
+import { LaneEdgesOverlay } from "./lane-edges";
 
 export type SemanticLanesProps = {
   chainNodeIds: Set<string>;
@@ -33,7 +38,13 @@ export type SemanticLanesProps = {
   onBackgroundClick: () => void;
   onSelect: (nodeId: string) => void;
   selectedNodeId: string | null;
+  watchedNodeIds?: Set<string>;
 };
+
+// Premise folds default open up to this size so assumption dependencies are
+// visible without interaction (amendment №2); larger sets fold to one line
+// (v1 §6.3) with per-node ⚓N badges as the fallback cue.
+const PREMISES_AUTO_OPEN_MAX = 4;
 
 type TopicLanes = {
   anchors: IRNode[];
@@ -172,6 +183,21 @@ function SubNodeBadge({ count }: { count: number }) {
   );
 }
 
+// Fallback cue when the premises fold is closed: the node still declares how
+// many premises it stands on (amendment №2 — dependency stays visible even
+// when its endpoint row is hidden, so the quiet edge can't draw).
+function PremiseBadge({ count }: { count: number }) {
+  if (count === 0) {
+    return null;
+  }
+  return (
+    <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-[var(--z-node-fill)] px-1.5 text-[11px] text-[var(--z-text-3)]">
+      <AnchorIcon className="size-3" />
+      {count}
+    </span>
+  );
+}
+
 // Full card — the "please pay attention" form, reserved for the frontier.
 function FrontierCard({
   chipIcon,
@@ -181,6 +207,7 @@ function FrontierCard({
   dimmed,
   node,
   onSelect,
+  premiseCount = 0,
   selected,
   subNodeCount,
 }: {
@@ -191,6 +218,7 @@ function FrontierCard({
   dimmed: boolean;
   node: IRNode;
   onSelect: (nodeId: string) => void;
+  premiseCount?: number;
   selected: boolean;
   subNodeCount: number;
 }) {
@@ -211,6 +239,7 @@ function FrontierCard({
       <span className="flex items-center gap-2">
         <TypeChip icon={chipIcon} label={chipLabel} tone={chipTone} />
         <SubNodeBadge count={subNodeCount} />
+        <PremiseBadge count={premiseCount} />
       </span>
       <span
         className={cn(
@@ -233,6 +262,7 @@ function LaneRow({
   muted,
   node,
   onSelect,
+  premiseCount = 0,
   selected,
   strike,
   subNodeCount,
@@ -244,6 +274,7 @@ function LaneRow({
   muted?: boolean;
   node: IRNode;
   onSelect: (nodeId: string) => void;
+  premiseCount?: number;
   selected: boolean;
   strike?: boolean;
   subNodeCount: number;
@@ -273,6 +304,7 @@ function LaneRow({
         {node.title}
       </span>
       <SubNodeBadge count={subNodeCount} />
+      <PremiseBadge count={premiseCount} />
       {trailing ? (
         <span className="shrink-0 text-[11px] text-[var(--z-text-3)]">
           {trailing}
@@ -307,6 +339,296 @@ function topicDomId(topicId: string | null) {
   return `truth-lane-topic-${topicId ?? "unassigned"}`;
 }
 
+function TopicSection({
+  isDimmed,
+  lanes,
+  model,
+  onLayoutChange,
+  onSelect,
+  selectedNodeId,
+  showHeading,
+  subCount,
+  topic,
+}: {
+  isDimmed: (nodeId: string) => boolean;
+  lanes: TopicLanes;
+  model: TruthGraphModel;
+  onLayoutChange: () => void;
+  onSelect: (nodeId: string) => void;
+  selectedNodeId: string | null;
+  showHeading: boolean;
+  subCount: (nodeId: string) => number;
+  topic: { id: string | null; label: string };
+}) {
+  const { t } = useLocale();
+  // Controlled fold (amendment №2): small premise sets open by default so
+  // their dependency edges draw without interaction; user toggles sync back
+  // through onToggle so the badge fallback below stays truthful.
+  const [premisesOpen, setPremisesOpen] = useState(
+    () => lanes.premises.length <= PREMISES_AUTO_OPEN_MAX
+  );
+  const premiseIds = useMemo(
+    () => new Set(lanes.premises.map((node) => node.id)),
+    [lanes.premises]
+  );
+  const selectedIsPremise = selectedNodeId
+    ? premiseIds.has(selectedNodeId)
+    : false;
+  useEffect(() => {
+    if (selectedIsPremise) {
+      setPremisesOpen(true);
+    }
+  }, [selectedIsPremise]);
+
+  // ⚓N badge only while the premises fold hides the edge endpoints.
+  const premiseDepCount = (nodeId: string) => {
+    if (premisesOpen) {
+      return 0;
+    }
+    return (model.parentEdgesByChild.get(nodeId) ?? []).filter(
+      (edge) =>
+        QUIET_EDGE_RELATIONS.has(edge.edge.relation) &&
+        premiseIds.has(edge.parentId)
+    ).length;
+  };
+
+  return (
+    <section className="mb-8" id={topicDomId(topic.id)}>
+      {showHeading ? (
+        <h3 className="mb-3 text-[13px] font-semibold text-[var(--z-text)]">
+          # {topic.label}
+        </h3>
+      ) : null}
+
+      {lanes.anchors.length > 0 ? (
+        <div className="mb-4 space-y-2">
+          {lanes.anchors.map((node) => {
+            const isGoal = node.kind === "goal";
+            const Icon = isGoal ? TargetIcon : ScaleIcon;
+            return (
+              <button
+                className="flex w-full items-start gap-2 rounded-md px-2 py-1 text-left hover:bg-[var(--z-node-fill)]"
+                data-testid={`truth-graph-node-${node.id}`}
+                key={node.id}
+                onClick={() => onSelect(node.id)}
+                style={focusStyle(isDimmed(node.id))}
+                type="button"
+              >
+                <Icon className="mt-0.5 size-4 shrink-0 text-[var(--z-text-2)]" />
+                <span className="min-w-0">
+                  <span className="mr-2 text-[11px] font-medium text-[var(--z-text-3)]">
+                    {isGoal ? t("graph.laneGoal") : t("graph.lanePrinciple")}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-[15px] font-medium leading-relaxed text-[var(--z-text)]",
+                      selectedNodeId === node.id && "font-semibold"
+                    )}
+                  >
+                    {node.title}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {lanes.premises.length > 0 ? (
+        // Global premises (v1 §6.3) — always present, never occupying the
+        // judgment's visual core. Open by default when small (amendment №2)
+        // so the dependency edges into them stay drawable.
+        <details
+          className="group mb-4"
+          onToggle={(event) => {
+            setPremisesOpen(event.currentTarget.open);
+            onLayoutChange();
+          }}
+          open={premisesOpen}
+        >
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1 text-[13px] text-[var(--z-text-2)] hover:bg-[var(--z-node-fill)] [&::-webkit-details-marker]:hidden">
+            <AnchorIcon className="size-3.5" />
+            {t("graph.premisesFold", { count: lanes.premises.length })}
+            <ChevronRightIcon className="size-3.5 transition-transform group-open:rotate-90" />
+          </summary>
+          <div className="mt-1 space-y-0.5 pl-4">
+            {lanes.premises.map((node) => (
+              <LaneRow
+                dimmed={isDimmed(node.id)}
+                icon={AnchorIcon}
+                iconClassName="text-[var(--z-text-3)]"
+                key={node.id}
+                muted
+                node={node}
+                onSelect={onSelect}
+                selected={selectedNodeId === node.id}
+                subNodeCount={subCount(node.id)}
+              />
+            ))}
+          </div>
+        </details>
+      ) : null}
+
+      {lanes.settled.length > 0 ? (
+        <div className="mb-5">
+          <LaneHeading>
+            {t("graph.laneSettled")} · {lanes.settled.length}
+          </LaneHeading>
+          <div className="space-y-0.5">
+            {lanes.settled.map((node) => (
+              <LaneRow
+                dimmed={isDimmed(node.id)}
+                icon={CheckIcon}
+                iconClassName="text-[var(--z-confirmed)]"
+                key={node.id}
+                node={node}
+                onSelect={onSelect}
+                premiseCount={premiseDepCount(node.id)}
+                selected={selectedNodeId === node.id}
+                subNodeCount={subCount(node.id)}
+                trailing={node.confirmedAt?.slice(0, 10)}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {frontierCount(lanes) > 0 ? (
+        <div className="mb-5">
+          <LaneHeading className="text-[var(--z-attention-text)]">
+            {t("graph.laneFrontier")} · {t("graph.frontierHint")}
+          </LaneHeading>
+          <div className="space-y-2">
+            {lanes.questions.map((question) => (
+              <div className="space-y-2" key={question.id}>
+                <FrontierCard
+                  chipIcon={HelpCircleIcon}
+                  chipLabel={t("graph.chipQuestion")}
+                  chipTone="attention"
+                  dimmed={isDimmed(question.id)}
+                  node={question}
+                  onSelect={onSelect}
+                  premiseCount={premiseDepCount(question.id)}
+                  selected={selectedNodeId === question.id}
+                  subNodeCount={subCount(question.id)}
+                />
+                {(lanes.candidatesByQuestion.get(question.id) ?? []).map(
+                  (candidate) => (
+                    // A candidate answer is a compact clickable line
+                    // (arrow → text), not a second card, so several options
+                    // under one question read as a tight list and the
+                    // "answers this" relationship stays visually close.
+                    <button
+                      className={cn(
+                        "ml-5 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left hover:bg-[var(--z-node-fill)]",
+                        selectedNodeId === candidate.id &&
+                          "bg-[var(--z-node-fill)]"
+                      )}
+                      data-testid={`truth-graph-node-${candidate.id}`}
+                      key={candidate.id}
+                      onClick={() => onSelect(candidate.id)}
+                      style={focusStyle(isDimmed(candidate.id))}
+                      title={candidate.title}
+                      type="button"
+                    >
+                      <CornerDownRightIcon className="size-3.5 shrink-0 text-[var(--z-candidate)]" />
+                      <span
+                        className={cn(
+                          "min-w-0 flex-1 truncate text-sm text-[var(--z-candidate-text)]",
+                          selectedNodeId === candidate.id && "font-medium"
+                        )}
+                      >
+                        {candidate.title}
+                      </span>
+                      <SubNodeBadge count={subCount(candidate.id)} />
+                      <PremiseBadge count={premiseDepCount(candidate.id)} />
+                      <span className="shrink-0 text-[11px] text-[var(--z-text-3)]">
+                        {t("graph.chipCandidate")}
+                      </span>
+                    </button>
+                  )
+                )}
+              </div>
+            ))}
+            {lanes.looseCandidates.map((candidate) => (
+              <FrontierCard
+                chipIcon={LightbulbIcon}
+                chipLabel={t("graph.chipCandidate")}
+                chipTone="candidate"
+                dashed
+                dimmed={isDimmed(candidate.id)}
+                key={candidate.id}
+                node={candidate}
+                onSelect={onSelect}
+                premiseCount={premiseDepCount(candidate.id)}
+                selected={selectedNodeId === candidate.id}
+                subNodeCount={subCount(candidate.id)}
+              />
+            ))}
+            {lanes.ideas.map((idea) => (
+              <LaneRow
+                dimmed={isDimmed(idea.id)}
+                icon={LightbulbIcon}
+                iconClassName="text-[var(--z-text-3)]"
+                key={idea.id}
+                muted
+                node={idea}
+                onSelect={onSelect}
+                premiseCount={premiseDepCount(idea.id)}
+                selected={selectedNodeId === idea.id}
+                subNodeCount={subCount(idea.id)}
+                trailing={t("graph.chipIdea")}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {lanes.excluded.length > 0 ? (
+        // The drawer, not the trash: excluded items stay reachable for
+        // review and anti-repetition, folded to a single counted line.
+        <details
+          className="group"
+          onToggle={onLayoutChange}
+          open={lanes.excluded.some((node) => node.id === selectedNodeId)}
+        >
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1 text-[13px] text-[var(--z-text-3)] hover:bg-[var(--z-node-fill)] [&::-webkit-details-marker]:hidden">
+            <XIcon className="size-3.5 text-[var(--z-rejected)]" />
+            {t("graph.excludedFold", { count: lanes.excluded.length })}
+            <ChevronRightIcon className="size-3.5 transition-transform group-open:rotate-90" />
+          </summary>
+          <div className="mt-1 space-y-0.5 pl-4">
+            {lanes.excluded.map((node) => {
+              const replacedBy = node.supersededBy
+                ? model.nodeById.get(node.supersededBy)?.title
+                : undefined;
+              return (
+                <LaneRow
+                  dimmed={isDimmed(node.id)}
+                  icon={XIcon}
+                  iconClassName="text-[var(--z-rejected)]"
+                  key={node.id}
+                  muted
+                  node={node}
+                  onSelect={onSelect}
+                  selected={selectedNodeId === node.id}
+                  strike
+                  subNodeCount={subCount(node.id)}
+                  trailing={
+                    replacedBy
+                      ? t("graph.replacedBy", { title: replacedBy })
+                      : undefined
+                  }
+                />
+              );
+            })}
+          </div>
+        </details>
+      ) : null}
+    </section>
+  );
+}
+
 export function SemanticLanes({
   chainNodeIds,
   childrenByParent,
@@ -316,6 +638,12 @@ export function SemanticLanes({
   selectedNodeId,
 }: SemanticLanesProps) {
   const { t } = useLocale();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  // Hover is tracked by delegation on the canvas (one handler, zero changes
+  // to the row components) and feeds the quiet-edge overlay's focus states.
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  // Fold toggles bump this so the overlay re-measures (see LaneEdgesOverlay).
+  const [layoutVersion, setLayoutVersion] = useState(0);
 
   const groups = useMemo(
     () =>
@@ -356,18 +684,39 @@ export function SemanticLanes({
     }
   }
 
+  function handleHover(event: MouseEvent<HTMLDivElement>) {
+    const row = (event.target as HTMLElement).closest<HTMLElement>(
+      '[data-testid^="truth-graph-node-"]'
+    );
+    setHoveredNodeId(
+      row?.dataset.testid?.slice("truth-graph-node-".length) ?? null
+    );
+  }
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: background click-to-deselect mirrors the previous canvas surface; nodes remain buttons.
     // biome-ignore lint/a11y/noNoninteractiveElementInteractions: same rationale — the div is the canvas, not a control.
     // biome-ignore lint/a11y/useKeyWithClickEvents: deselection is a pointer nicety; keyboard users deselect via the detail card close.
+    // biome-ignore lint/a11y/useKeyWithMouseEvents: hover only feeds the quiet-edge highlight — keyboard users get the same relationships from the chain card on selection.
     <div
-      className="mx-auto w-full max-w-3xl px-6 py-4"
+      className="relative mx-auto w-full max-w-3xl py-4 pr-6 pl-[var(--z-lane-gutter)]"
       data-testid="truth-graph-lanes"
       onClick={handleBackground}
+      onMouseLeave={() => setHoveredNodeId(null)}
+      onMouseOver={handleHover}
+      ref={rootRef}
     >
+      <LaneEdgesOverlay
+        chainNodeIds={chainNodeIds}
+        containerRef={rootRef}
+        hoveredNodeId={hoveredNodeId}
+        layoutVersion={layoutVersion}
+        model={model}
+        selectedNodeId={selectedNodeId}
+      />
       {groups.length > 1 && totalOpen > 0 ? (
-        // Project-wide frontier strip (amendment §6): one line, jumps to the
-        // topic's spine — never a page change.
+        // Project-wide frontier strip (amendment №1 §6): one line, jumps to
+        // the topic's spine — never a page change.
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--z-attention-soft)] bg-[var(--z-card-bg)] px-3 py-2">
           <span className="text-xs font-medium text-[var(--z-attention-text)]">
             {t("graph.frontierStrip", { count: totalOpen })}
@@ -392,234 +741,18 @@ export function SemanticLanes({
       ) : null}
 
       {groups.map(({ lanes, topic }) => (
-        <section
-          className="mb-8"
-          id={topicDomId(topic.id)}
+        <TopicSection
+          isDimmed={isDimmed}
           key={topic.id ?? "unassigned"}
-        >
-          {groups.length > 1 ? (
-            <h3 className="mb-3 text-[13px] font-semibold text-[var(--z-text)]">
-              # {topic.label}
-            </h3>
-          ) : null}
-
-          {lanes.anchors.length > 0 ? (
-            <div className="mb-4 space-y-2">
-              {lanes.anchors.map((node) => {
-                const isGoal = node.kind === "goal";
-                const Icon = isGoal ? TargetIcon : ScaleIcon;
-                return (
-                  <button
-                    className="flex w-full items-start gap-2 rounded-md px-2 py-1 text-left hover:bg-[var(--z-node-fill)]"
-                    data-testid={`truth-graph-node-${node.id}`}
-                    key={node.id}
-                    onClick={() => onSelect(node.id)}
-                    style={focusStyle(isDimmed(node.id))}
-                    type="button"
-                  >
-                    <Icon className="mt-0.5 size-4 shrink-0 text-[var(--z-text-2)]" />
-                    <span className="min-w-0">
-                      <span className="mr-2 text-[11px] font-medium text-[var(--z-text-3)]">
-                        {isGoal
-                          ? t("graph.laneGoal")
-                          : t("graph.lanePrinciple")}
-                      </span>
-                      <span
-                        className={cn(
-                          "text-[15px] font-medium leading-relaxed text-[var(--z-text)]",
-                          selectedNodeId === node.id && "font-semibold"
-                        )}
-                      >
-                        {node.title}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-
-          {lanes.premises.length > 0 ? (
-            // Global premises fold into one line (v1 §6.3) — always present,
-            // never occupying the judgment's visual core.
-            <details
-              className="group mb-4"
-              open={lanes.premises.some((node) => node.id === selectedNodeId)}
-            >
-              <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1 text-[13px] text-[var(--z-text-2)] hover:bg-[var(--z-node-fill)] [&::-webkit-details-marker]:hidden">
-                <AnchorIcon className="size-3.5" />
-                {t("graph.premisesFold", { count: lanes.premises.length })}
-                <ChevronRightIcon className="size-3.5 transition-transform group-open:rotate-90" />
-              </summary>
-              <div className="mt-1 space-y-0.5 pl-4">
-                {lanes.premises.map((node) => (
-                  <LaneRow
-                    dimmed={isDimmed(node.id)}
-                    icon={AnchorIcon}
-                    iconClassName="text-[var(--z-text-3)]"
-                    key={node.id}
-                    muted
-                    node={node}
-                    onSelect={onSelect}
-                    selected={selectedNodeId === node.id}
-                    subNodeCount={subCount(node.id)}
-                  />
-                ))}
-              </div>
-            </details>
-          ) : null}
-
-          {lanes.settled.length > 0 ? (
-            <div className="mb-5">
-              <LaneHeading>
-                {t("graph.laneSettled")} · {lanes.settled.length}
-              </LaneHeading>
-              <div className="space-y-0.5">
-                {lanes.settled.map((node) => (
-                  <LaneRow
-                    dimmed={isDimmed(node.id)}
-                    icon={CheckIcon}
-                    iconClassName="text-[var(--z-confirmed)]"
-                    key={node.id}
-                    node={node}
-                    onSelect={onSelect}
-                    selected={selectedNodeId === node.id}
-                    subNodeCount={subCount(node.id)}
-                    trailing={node.confirmedAt?.slice(0, 10)}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {frontierCount(lanes) > 0 ? (
-            <div className="mb-5">
-              <LaneHeading className="text-[var(--z-attention-text)]">
-                {t("graph.laneFrontier")} · {t("graph.frontierHint")}
-              </LaneHeading>
-              <div className="space-y-2">
-                {lanes.questions.map((question) => (
-                  <div className="space-y-2" key={question.id}>
-                    <FrontierCard
-                      chipIcon={HelpCircleIcon}
-                      chipLabel={t("graph.chipQuestion")}
-                      chipTone="attention"
-                      dimmed={isDimmed(question.id)}
-                      node={question}
-                      onSelect={onSelect}
-                      selected={selectedNodeId === question.id}
-                      subNodeCount={subCount(question.id)}
-                    />
-                    {(lanes.candidatesByQuestion.get(question.id) ?? []).map(
-                      (candidate) => (
-                        // A candidate answer is now a compact clickable line
-                        // (arrow → text), not a second card, so several options
-                        // under one question read as a tight list and the
-                        // "answers this" relationship stays visually close.
-                        <button
-                          className={cn(
-                            "ml-5 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left hover:bg-[var(--z-node-fill)]",
-                            selectedNodeId === candidate.id &&
-                              "bg-[var(--z-node-fill)]"
-                          )}
-                          data-testid={`truth-graph-node-${candidate.id}`}
-                          key={candidate.id}
-                          onClick={() => onSelect(candidate.id)}
-                          style={focusStyle(isDimmed(candidate.id))}
-                          title={candidate.title}
-                          type="button"
-                        >
-                          <CornerDownRightIcon className="size-3.5 shrink-0 text-[var(--z-candidate)]" />
-                          <span
-                            className={cn(
-                              "min-w-0 flex-1 truncate text-sm text-[var(--z-candidate-text)]",
-                              selectedNodeId === candidate.id && "font-medium"
-                            )}
-                          >
-                            {candidate.title}
-                          </span>
-                          <SubNodeBadge count={subCount(candidate.id)} />
-                          <span className="shrink-0 text-[11px] text-[var(--z-text-3)]">
-                            {t("graph.chipCandidate")}
-                          </span>
-                        </button>
-                      )
-                    )}
-                  </div>
-                ))}
-                {lanes.looseCandidates.map((candidate) => (
-                  <FrontierCard
-                    chipIcon={LightbulbIcon}
-                    chipLabel={t("graph.chipCandidate")}
-                    chipTone="candidate"
-                    dashed
-                    dimmed={isDimmed(candidate.id)}
-                    key={candidate.id}
-                    node={candidate}
-                    onSelect={onSelect}
-                    selected={selectedNodeId === candidate.id}
-                    subNodeCount={subCount(candidate.id)}
-                  />
-                ))}
-                {lanes.ideas.map((idea) => (
-                  <LaneRow
-                    dimmed={isDimmed(idea.id)}
-                    icon={LightbulbIcon}
-                    iconClassName="text-[var(--z-text-3)]"
-                    key={idea.id}
-                    muted
-                    node={idea}
-                    onSelect={onSelect}
-                    selected={selectedNodeId === idea.id}
-                    subNodeCount={subCount(idea.id)}
-                    trailing={t("graph.chipIdea")}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {lanes.excluded.length > 0 ? (
-            // The drawer, not the trash: excluded items stay reachable for
-            // review and anti-repetition, folded to a single counted line.
-            <details
-              className="group"
-              open={lanes.excluded.some((node) => node.id === selectedNodeId)}
-            >
-              <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1 text-[13px] text-[var(--z-text-3)] hover:bg-[var(--z-node-fill)] [&::-webkit-details-marker]:hidden">
-                <XIcon className="size-3.5 text-[var(--z-rejected)]" />
-                {t("graph.excludedFold", { count: lanes.excluded.length })}
-                <ChevronRightIcon className="size-3.5 transition-transform group-open:rotate-90" />
-              </summary>
-              <div className="mt-1 space-y-0.5 pl-4">
-                {lanes.excluded.map((node) => {
-                  const replacedBy = node.supersededBy
-                    ? model.nodeById.get(node.supersededBy)?.title
-                    : undefined;
-                  return (
-                    <LaneRow
-                      dimmed={isDimmed(node.id)}
-                      icon={XIcon}
-                      iconClassName="text-[var(--z-rejected)]"
-                      key={node.id}
-                      muted
-                      node={node}
-                      onSelect={onSelect}
-                      selected={selectedNodeId === node.id}
-                      strike
-                      subNodeCount={subCount(node.id)}
-                      trailing={
-                        replacedBy
-                          ? t("graph.replacedBy", { title: replacedBy })
-                          : undefined
-                      }
-                    />
-                  );
-                })}
-              </div>
-            </details>
-          ) : null}
-        </section>
+          lanes={lanes}
+          model={model}
+          onLayoutChange={() => setLayoutVersion((version) => version + 1)}
+          onSelect={onSelect}
+          selectedNodeId={selectedNodeId}
+          showHeading={groups.length > 1}
+          subCount={subCount}
+          topic={topic}
+        />
       ))}
     </div>
   );

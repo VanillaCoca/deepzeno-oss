@@ -11,6 +11,7 @@ import {
   buildTruthGraphModel,
   getChainRootIds,
   getUpstreamNodeIds,
+  relationKey,
   type TruthGraphFlowEdge,
   type TruthGraphModel,
   type TruthGraphTopic,
@@ -81,29 +82,6 @@ function chainPrefix(node: IRNode, isRoot: boolean, isSelected: boolean) {
   return "•";
 }
 
-// i18n key for the built-in phrase of a structural relation. Used as a fallback
-// label when an edge has no free-form AI-written `label` yet. Only the four
-// flow relations ever appear on a chain edge; the other two are mapped for
-// completeness.
-function relationKey(relation: string): string | null {
-  switch (relation) {
-    case "depends_on":
-      return "graph.relDependsOn";
-    case "resolves":
-      return "graph.relResolves";
-    case "refines":
-      return "graph.relRefines";
-    case "implies":
-      return "graph.relImplies";
-    case "supersedes":
-      return "graph.relSupersedes";
-    case "contradicts":
-      return "graph.relContradicts";
-    default:
-      return null;
-  }
-}
-
 type ChainTreeNode = {
   id: string;
   // The graph edge linking this node to its tree-parent (this node is the
@@ -161,14 +139,14 @@ function flattenChainTree(
     pipes.map((last) => (last ? "    " : "│   ")).join("") +
     (pipes.length === 0 ? "" : isLast ? "└── " : "├── ");
   out.push({ edge: node.edge, guide, id: node.id });
-  node.children.forEach((child, index) =>
+  node.children.forEach((child, index) => {
     flattenChainTree(
       child,
       [...pipes, isLast],
       index === node.children.length - 1,
       out
-    )
-  );
+    );
+  });
 }
 
 function CompactTruthList({

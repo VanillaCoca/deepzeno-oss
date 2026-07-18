@@ -129,6 +129,11 @@
   --z-topic-gap: 20px; /* 全貌层 Topic 之间留白 (靠留白分隔,非边框) */
   --z-tight-arrow-gap: 44px; /* tight 关系同行横向箭头间距 */
 
+  /* ---- 全貌层安静依赖线 (修订案 №2: 左 gutter 内的正交通道) --------------- */
+  --z-lane-gutter: 40px; /* 语义泳道左侧依赖线走廊宽度 */
+  --z-lane-channel-gap: 9px; /* gutter 内相邻垂直通道间距 (窄于单链层 channel-gap) */
+  --z-edge-label-bg: var(--z-card-bg); /* 悬停边标签底色 (压住线条) */
+
   /* ---- 聚焦三级透明度 (CSS opacity,过渡而非重绘,见规则文档 §4.6) ------- */
   --z-focus-full: 1; /* 聚焦节点 */
   --z-focus-related: 0.55; /* 直接相关 (一跳) */
