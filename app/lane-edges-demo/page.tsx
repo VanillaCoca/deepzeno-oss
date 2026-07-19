@@ -10,7 +10,9 @@ import { TruthGraph } from "@/components/ir/truth-graph";
 import type { IREdge, IRNode } from "@/lib/ir/types";
 import { EXAMPLE_PROJECTS } from "@/lib/workspace/example-content";
 
-const SPEC = EXAMPLE_PROJECTS[0];
+const SPEC =
+  EXAMPLE_PROJECTS.find((project) => project.slug === "zh-coze-coding") ??
+  EXAMPLE_PROJECTS[0];
 
 function buildData() {
   const nodes: IRNode[] = [];
