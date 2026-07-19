@@ -6,7 +6,10 @@ import type { IRKind, IRPlanSubtype } from "@/lib/ir/types";
 import { getIRPrefix } from "@/lib/ir/types";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { generateUUID } from "@/lib/utils";
-import type { ExampleProject } from "./example-content";
+import type {
+  ExampleConversationTurn,
+  ExampleProject,
+} from "./example-content";
 import { EXAMPLE_PROJECTS } from "./example-content";
 import {
   createConversation,
@@ -28,6 +31,14 @@ import {
 type SeedArgs = { userId: string; userEmail?: string | null };
 
 type NextIdFn = (kind: IRKind, subtype?: IRPlanSubtype) => Promise<string>;
+
+// "official" is the showcase form (✦-prefixed name + welcome message);
+// "personal" seeds the same graph as an ordinary working project.
+export type ExampleVariant = "official" | "personal";
+
+// One turn per minute, ending just before now, so the exchange reads as
+// recent history and sorts strictly ascending in both message tables.
+const TURN_SPACING_MS = 60_000;
 
 // The service-role admin client, typed as `any` to match lib/workspace/queries.ts:
 // the untyped supabase-js client types table rows as `never`, which otherwise
@@ -126,6 +137,107 @@ async function seedWelcomeMessage({
   ]);
 }
 
+// Seeds a multi-turn sandbox exchange into a topic's conversation, so the
+// example shows the discussion its graph came out of. Returns turnIndex →
+// messageId so nodes can point their provenance fields at the exact turn
+// they were distilled from.
+//
+// Best-effort: this goes through the drizzle chat layer, and a failure here
+// must not discard the graph. Returns an empty map on failure — nodes then
+// seed without provenance, which is a degraded example, not a broken one.
+async function seedTopicConversation({
+  userId,
+  projectId,
+  topicId,
+  conversationId,
+  chatTitle,
+  conversation,
+  idByKey,
+  endAt,
+}: {
+  userId: string;
+  projectId: string;
+  topicId: string;
+  conversationId: string;
+  chatTitle: string;
+  conversation: ExampleConversationTurn[];
+  idByKey: Map<string, string>;
+  endAt: Date;
+}): Promise<Map<number, string>> {
+  const turnIds = new Map<number, string>();
+  const startMs = endAt.getTime() - conversation.length * TURN_SPACING_MS;
+
+  const chatMessages: Array<{
+    id: string;
+    chatId: string;
+    role: string;
+    parts: DBMessage["parts"];
+    attachments: DBMessage["attachments"];
+    createdAt: Date;
+  }> = [];
+  const workspaceMessages: Array<{
+    id: string;
+    conversationId: string;
+    topicId: string;
+    projectId: string;
+    role: ExampleConversationTurn["role"];
+    content: string;
+    createdAt: string;
+  }> = [];
+
+  conversation.forEach((turn, index) => {
+    const messageId = generateUUID();
+    turnIds.set(index, messageId);
+    const createdAt = new Date(startMs + index * TURN_SPACING_MS);
+    // `{{ref:key}}` → the self-closing tag the chat renders as an IR chip.
+    // An unknown key drops out rather than shipping a broken placeholder.
+    const text = turn.text.replace(
+      /\{\{ref:([a-zA-Z0-9_-]+)\}\}/g,
+      (_match, key: string) => {
+        const nodeId = idByKey.get(key);
+        if (!nodeId) {
+          console.warn(`[example-seed] unknown conversation ref "${key}"`);
+          return "";
+        }
+        return `<inline-ref id="${nodeId}"/>`;
+      }
+    );
+
+    chatMessages.push({
+      id: messageId,
+      chatId: conversationId,
+      role: turn.role,
+      parts: [{ type: "text", text }] as DBMessage["parts"],
+      attachments: [] as DBMessage["attachments"],
+      createdAt,
+    });
+    workspaceMessages.push({
+      id: messageId,
+      conversationId,
+      topicId,
+      projectId,
+      role: turn.role,
+      content: text,
+      createdAt: createdAt.toISOString(),
+    });
+  });
+
+  try {
+    await saveChat({
+      id: conversationId,
+      userId,
+      title: chatTitle,
+      visibility: "private",
+    });
+    await saveMessages({ messages: chatMessages });
+    await saveWorkspaceMessages(workspaceMessages);
+    return turnIds;
+  } catch (error) {
+    console.error("[example-seed] conversation seeding failed", error);
+    return new Map();
+  }
+}
+
 // Inserts research runs + evidence, an active watch, and the watchtower
 // alert candidate for the nodes an example declares research for. Each
 // artifact class is individually tolerant: on a pre-watchtower-migration
@@ -156,22 +268,40 @@ async function seedResearchArtifacts({
 
     // 1. Runs + evidence (tables exist since the L2 migration).
     for (const run of entry.runs) {
-      const { data: runRow, error: runError } = await client
+      const runRowBase = {
+        project_id: projectId,
+        topic_id: topicId,
+        origin_node_id: nodeId,
+        plan: run.plan,
+        brief: run.brief,
+        status: "done",
+        created_at: nowIso,
+        finished_at: nowIso,
+      };
+      // run_type only exists post-watchtower-migration, and 'research' is the
+      // column default — so only a patrol run needs to set it, and an older
+      // database falls back to a plain research run rather than failing.
+      let insert = await client
         .from("research_run")
-        .insert({
-          project_id: projectId,
-          topic_id: topicId,
-          origin_node_id: nodeId,
-          plan: run.plan,
-          brief: run.brief,
-          status: "done",
-          created_at: nowIso,
-          finished_at: nowIso,
-          // run_type only exists post-watchtower-migration; 'research' is
-          // the column default, so omitting keeps both schemas happy.
-        })
+        .insert(
+          run.type === "patrol"
+            ? { ...runRowBase, run_type: "patrol" }
+            : runRowBase
+        )
         .select("id")
         .single();
+      if (insert.error && run.type === "patrol") {
+        console.warn(
+          "[example-seed] run_type unavailable; seeding patrol run as research",
+          insert.error.message
+        );
+        insert = await client
+          .from("research_run")
+          .insert(runRowBase)
+          .select("id")
+          .single();
+      }
+      const { data: runRow, error: runError } = insert;
       if (runError) {
         throw runError;
       }
@@ -208,6 +338,11 @@ async function seedResearchArtifacts({
         reason: entry.watch.reason,
         cadence: entry.watch.cadence,
         status: "active",
+        // next_directions needs the 20260719000001 migration; the whole
+        // insert is already skipped-with-a-warning on older databases.
+        ...(entry.watch.nextDirections
+          ? { next_directions: entry.watch.nextDirections }
+          : {}),
         last_patrol_at: nowIso,
         ...(entry.alert
           ? { last_signal_at: nowIso, last_alert_at: nowIso }
@@ -270,24 +405,30 @@ async function seedResearchArtifacts({
   }
 }
 
-async function seedOneExampleProject({
+// Exported for the one-off backfill script, which seeds a single spec (and
+// the personal variant) into existing users rather than the whole set.
+export async function seedOneExampleProject({
   userId,
   userEmail,
   spec,
   nextId,
   nowDate,
   nowIso,
+  variant = "official",
 }: SeedArgs & {
   spec: ExampleProject;
   nextId: NextIdFn;
   nowDate: Date;
   nowIso: string;
+  variant?: ExampleVariant;
 }) {
   const client = getClient();
+  const projectName =
+    variant === "personal" ? (spec.personalName ?? spec.name) : spec.name;
   const project = await createProjectForUser({
     userId,
     userEmail,
-    name: spec.name,
+    name: projectName,
   });
 
   // Create topics (in declared order → positions) and a conversation each.
@@ -297,6 +438,7 @@ async function seedOneExampleProject({
     conversationId: string;
     nodes: ExampleProject["topics"][number]["nodes"];
     edges: ExampleProject["topics"][number]["edges"];
+    conversation?: ExampleConversationTurn[];
   }> = [];
 
   for (const [index, topic] of spec.topics.entries()) {
@@ -316,21 +458,53 @@ async function seedOneExampleProject({
       conversationId: conversation.id,
       nodes: topic.nodes,
       edges: topic.edges,
+      conversation: topic.conversation,
     });
   }
 
-  // Assign ids to every node, then bulk-insert nodes, then edges.
+  // Ids first: the conversation's {{ref:}} placeholders need them, and the
+  // node rows need the message ids the conversation returns. Two passes, so
+  // each side can point at the other.
   const idByKey = new Map<string, string>();
   const topicIdByNodeKey = new Map<string, string>();
-  const nodeRows: Record<string, unknown>[] = [];
 
   for (const topic of createdTopics) {
     for (const node of topic.nodes) {
       const id = await nextId(node.kind, node.subtype);
       idByKey.set(node.key, id);
       topicIdByNodeKey.set(node.key, topic.topicId);
+    }
+  }
+
+  // Conversations before nodes, so provenance can reference real message ids.
+  const turnIdsByTopicKey = new Map<string, Map<number, string>>();
+  for (const topic of createdTopics) {
+    if (!topic.conversation || topic.conversation.length === 0) {
+      continue;
+    }
+    const turnIds = await seedTopicConversation({
+      userId,
+      projectId: project.id,
+      topicId: topic.topicId,
+      conversationId: topic.conversationId,
+      chatTitle: projectName,
+      conversation: topic.conversation,
+      idByKey,
+      endAt: nowDate,
+    });
+    turnIdsByTopicKey.set(topic.key, turnIds);
+  }
+
+  const nodeRows: Record<string, unknown>[] = [];
+  for (const topic of createdTopics) {
+    const turnIds = turnIdsByTopicKey.get(topic.key);
+    for (const node of topic.nodes) {
+      const sourceTurnId =
+        node.sourceTurnIndex === undefined
+          ? undefined
+          : turnIds?.get(node.sourceTurnIndex);
       nodeRows.push({
-        id,
+        id: idByKey.get(node.key),
         project_id: project.id,
         topic_id: topic.topicId,
         kind: node.kind,
@@ -344,6 +518,15 @@ async function seedOneExampleProject({
           node.sourceLayer ?? (node.status === "active" ? "manual" : "sweep"),
         created_by: "ai",
         created_at: nowIso,
+        // Provenance back to the exchange this judgment came from — the same
+        // columns the live inline-marker path writes.
+        ...(sourceTurnId
+          ? {
+              source_chat_id: topic.conversationId,
+              source_turn_id: sourceTurnId,
+              source_text_span: node.sourceSpan ?? null,
+            }
+          : {}),
         ...(node.status === "active" ? { confirmed_at: nowIso } : {}),
         ...(node.status === "pending"
           ? { promoted_to_pending_at: nowIso }
@@ -408,9 +591,13 @@ async function seedOneExampleProject({
     }
   }
 
+  // The personal variant is meant to read as a real working project, so it
+  // skips the official welcome message entirely.
   const landing =
-    createdTopics.find((topic) => topic.key === spec.welcomeTopicKey) ??
-    createdTopics[0];
+    variant === "personal"
+      ? null
+      : (createdTopics.find((topic) => topic.key === spec.welcomeTopicKey) ??
+        createdTopics[0]);
   if (landing) {
     // Best-effort: the graph is the valuable part. A failure seeding the
     // welcome message (which goes through the drizzle chat layer) must not
@@ -421,7 +608,7 @@ async function seedOneExampleProject({
         projectId: project.id,
         topicId: landing.topicId,
         conversationId: landing.conversationId,
-        projectName: spec.name,
+        projectName,
         content: spec.welcome,
         nowDate,
         nowIso,
